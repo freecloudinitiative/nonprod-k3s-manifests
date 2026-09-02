@@ -21,6 +21,8 @@ services, but it is isolated from the production domain and edge network.
   ACME or Let's Encrypt.
 - Authentik uses local login and enrollment only; social OAuth sources are
   disabled because they require a publicly registered callback hostname.
+- The frontend deliberately runs with `appEnv: prod` so nonprod exercises the
+  real backend and authentication paths rather than development mocks.
 - Argo CD Applications read only this repository:
   `https://github.com/freecloudinitiative/nonprod-k3s-manifests.git`.
 - Secrets remain in the nonprod OpenBao instance and are materialized by
