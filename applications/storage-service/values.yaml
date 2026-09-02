@@ -97,8 +97,13 @@ networkPolicy:
   # (10.43.0.0/16); narrowed to /32 to match its three peer charts
   # (compute-service, database-service, terminal-gateway) once confirming that
   # storage-service/internal/k8s/ only ever reaches the Kubernetes API server
-  # through this ipBlock — never another in-cluster Service.
-  kubernetesAPIServerCIDR: 10.43.0.1/32
+  # The apiserver's real endpoint addresses -- one /32 per control-plane
+  # node -- and its secure port. NOT the kubernetes Service ClusterIP:
+  # NetworkPolicy matches the post-DNAT destination, so a ClusterIP rule
+  # never fires. Check with: kubectl -n default get endpoints kubernetes
+  kubernetesAPIServerCIDRs:
+    - 10.0.0.116/32
+  kubernetesAPIServerPort: 6443
 
 objectStore:
   enabled: true

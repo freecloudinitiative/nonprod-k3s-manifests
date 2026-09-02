@@ -60,17 +60,20 @@ spec:
       ports:
         - protocol: TCP
           port: 6379
-    # the Kubernetes API server. NetworkPolicy cannot express the
-    # control-plane endpoint as a namespace/pod selector, so this uses an
-    # ipBlock rather than silently omitting egress restriction for this
-    # destination (an omission is how a NetworkPolicy appears complete while
-    # permitting everything). Keep this /32 aligned with the k3s service CIDR.
+    # Kubernetes API server. NetworkPolicy cannot express the control-plane
+    # endpoint as a namespace/pod selector, so it takes an ipBlock -- and the
+    # match happens after kube-proxy has DNAT'd the kubernetes Service, so
+    # these must be the apiserver's real endpoint addresses (every
+    # control-plane node, on its secure port), never the 10.43.0.1 ClusterIP.
+    # A rule written against the ClusterIP matches nothing and the request is
+    # rejected: `dial tcp 10.43.0.1:443: connect: connection refused`.
     - to:
+{{- range .Values.networkPolicy.kubernetesAPIServerCIDRs }}
         - ipBlock:
-            cidr: {{ .Values.networkPolicy.kubernetesAPIServerCIDR }}
+            cidr: {{ . }}
+{{- end }}
       ports:
-        - protocol: TCP
-          port: 443
+        - {protocol: TCP, port: {{ .Values.networkPolicy.kubernetesAPIServerPort }}}
     # the object-store namespace, on its private S3 API port.
     - to:
         - namespaceSelector:
