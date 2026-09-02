@@ -61,15 +61,22 @@ spec:
         - protocol: TCP
           port: 6379
     # Kubernetes API server for namespace lifecycle management.
-    # NetworkPolicy cannot express the control-plane endpoint as a
-    # namespace/pod selector, so this uses an ipBlock for the cluster's
-    # Service CIDR.
+    # endpoint as a namespace/pod selector, so it takes an ipBlock -- and the
+    # match happens after kube-proxy has DNAT'd the kubernetes Service, so
+    # these must be the apiserver's real endpoint addresses (every
+    # control-plane node, on its secure port), never the 10.43.0.1 ClusterIP.
+    # A rule written against the ClusterIP matches nothing and the request is
+    # rejected: `dial tcp 10.43.0.1:443: connect: connection refused`.
+    {{- if or (not .Values.networkPolicy.kubernetesAPIServerCIDRs) (not .Values.networkPolicy.kubernetesAPIServerPort) }}
+    {{- fail "networkPolicy.kubernetesAPIServerCIDRs and .kubernetesAPIServerPort are both required: an egress rule whose peer list or port renders empty is read by NetworkPolicy as every destination, or every port on the control plane." }}
+    {{- end }}
     - to:
+{{- range .Values.networkPolicy.kubernetesAPIServerCIDRs }}
         - ipBlock:
-            cidr: {{ .Values.networkPolicy.kubernetesAPIServerCIDR }}
+            cidr: {{ . }}
+{{- end }}
       ports:
-        - protocol: TCP
-          port: 443
+        - {protocol: TCP, port: {{ .Values.networkPolicy.kubernetesAPIServerPort }}}
     # backend (iam-service for quota checks)
     - to:
         - namespaceSelector:

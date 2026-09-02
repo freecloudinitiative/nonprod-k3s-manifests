@@ -71,8 +71,13 @@ networkPolicy:
   # before these destination peers match. Ingress remains restricted.
   restrictEgress: false
   # k3s's default kubernetes Service address. Override if the cluster service
-  # CIDR differs; an explicit /32 avoids opening all service-CIDR egress.
-  kubernetesAPIServerCIDR: 10.43.0.1/32
+  # The apiserver's real endpoint addresses -- one /32 per control-plane
+  # node -- and its secure port. NOT the kubernetes Service ClusterIP:
+  # NetworkPolicy matches the post-DNAT destination, so a ClusterIP rule
+  # never fires. Check with: kubectl -n default get endpoints kubernetes
+  kubernetesAPIServerCIDRs:
+    - 10.0.0.116/32
+  kubernetesAPIServerPort: 6443
 
 kubernetes:
   enabled: true
