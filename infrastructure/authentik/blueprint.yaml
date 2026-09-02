@@ -1,0 +1,914 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: authentik-blueprints
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+data:
+  freecloudinitiative.yaml: |
+    version: 1
+    metadata:
+      name: Free Cloud Initiative frontend OIDC
+      labels:
+        blueprints.goauthentik.io/instantiate: "true"
+    entries:
+      - model: authentik_providers_oauth2.oauth2provider
+        id: freecloudinitiative-frontend-provider
+        identifiers:
+          name: freecloudinitiative-frontend
+        attrs:
+          authorization_flow: !Find [authentik_flows.flow, [slug, default-provider-authorization-implicit-consent]]
+          invalidation_flow: !Find [authentik_flows.flow, [slug, default-provider-invalidation-flow]]
+          client_type: public
+          client_id: freecloudinitiative-frontend
+          grant_types:
+            - authorization_code
+            - refresh_token
+          # Stable subject identifier: the frontend's OIDC `sub` is the join key
+          # for the platform account row, so it must not change when a user
+          # edits their email or username.
+          sub_mode: hashed_user_id
+          access_code_validity: minutes=1
+          access_token_validity: minutes=10
+          refresh_token_validity: days=14
+          redirect_uris:
+            - matching_mode: strict
+              url: https://nonprod.freecloudinitiative.test/callback
+              redirect_uri_type: authorization
+          property_mappings:
+            - !Find [authentik_providers_oauth2.scopemapping, [managed, goauthentik.io/providers/oauth2/scope-openid]]
+            - !Find [authentik_providers_oauth2.scopemapping, [managed, goauthentik.io/providers/oauth2/scope-profile]]
+            - !Find [authentik_providers_oauth2.scopemapping, [managed, goauthentik.io/providers/oauth2/scope-email]]
+            # Required for the refresh_token grant. Without it the SPA gets no
+            # refresh token and react-oidc-context falls back to a hidden iframe
+            # that the frontend CSP blocks — sessions then die at access-token
+            # expiry. See frontend/src/lib/oidc.ts.
+            - !Find [authentik_providers_oauth2.scopemapping, [managed, goauthentik.io/providers/oauth2/scope-offline_access]]
+          signing_key: !Find [authentik_crypto.certificatekeypair, [name, authentik Self-signed Certificate]]
+      - model: authentik_core.application
+        identifiers:
+          slug: freecloudinitiative
+        attrs:
+          name: Free Cloud Initiative
+          provider: !KeyOf freecloudinitiative-frontend-provider
+          policy_engine_mode: any
+
+      # GROUPS
+      - model: authentik_core.group
+        identifiers:
+          name: grafana-admins
+      - model: authentik_core.group
+        identifiers:
+          name: argocd-admins
+      - model: authentik_core.group
+        identifiers:
+          name: vault-admins
+      - model: authentik_core.group
+        identifiers:
+          name: registry-admins
+
+      # FCI IAM role groups. iam-service adds each provisioned user to exactly
+      # one of these, keyed by iam.users.role. Names are a cross-repo contract
+      # with iam-service/internal/authz — do not rename without changing both.
+      - model: authentik_core.group
+        identifiers:
+          name: fci-admin
+      - model: authentik_core.group
+        identifiers:
+          name: fci-editor
+      - model: authentik_core.group
+        identifiers:
+          name: fci-viewer
+      - model: authentik_core.group
+        identifiers:
+          name: fci-auditor
+
+      # GRAFANA
+      - model: authentik_providers_oauth2.oauth2provider
+        id: grafana-provider
+        identifiers:
+          name: grafana
+        attrs:
+          authorization_flow: !Find [authentik_flows.flow, [slug, default-provider-authorization-implicit-consent]]
+          invalidation_flow: !Find [authentik_flows.flow, [slug, default-provider-invalidation-flow]]
+          client_type: confidential
+          client_id: grafana-oidc
+          client_secret: !Env GRAFANA_OIDC_SECRET
+          redirect_uris:
+            - matching_mode: strict
+              url: https://grafana.nonprod.freecloudinitiative.test/grafana/login/generic_oauth
+          property_mappings:
+            - !Find [authentik_providers_oauth2.scopemapping, [managed, goauthentik.io/providers/oauth2/scope-openid]]
+            - !Find [authentik_providers_oauth2.scopemapping, [managed, goauthentik.io/providers/oauth2/scope-profile]]
+            - !Find [authentik_providers_oauth2.scopemapping, [managed, goauthentik.io/providers/oauth2/scope-email]]
+          signing_key: !Find [authentik_crypto.certificatekeypair, [name, authentik Self-signed Certificate]]
+      - model: authentik_core.application
+        identifiers:
+          slug: grafana
+        attrs:
+          name: Grafana
+          provider: !KeyOf grafana-provider
+
+      # ARGOCD
+      - model: authentik_providers_oauth2.oauth2provider
+        id: argocd-provider
+        identifiers:
+          name: argocd
+        attrs:
+          authorization_flow: !Find [authentik_flows.flow, [slug, default-provider-authorization-implicit-consent]]
+          invalidation_flow: !Find [authentik_flows.flow, [slug, default-provider-invalidation-flow]]
+          client_type: confidential
+          client_id: argocd-oidc
+          client_secret: !Env ARGOCD_OIDC_SECRET
+          redirect_uris:
+            - matching_mode: strict
+              url: https://argocd.nonprod.freecloudinitiative.test/api/dex/callback
+          property_mappings:
+            - !Find [authentik_providers_oauth2.scopemapping, [managed, goauthentik.io/providers/oauth2/scope-openid]]
+            - !Find [authentik_providers_oauth2.scopemapping, [managed, goauthentik.io/providers/oauth2/scope-profile]]
+            - !Find [authentik_providers_oauth2.scopemapping, [managed, goauthentik.io/providers/oauth2/scope-email]]
+          signing_key: !Find [authentik_crypto.certificatekeypair, [name, authentik Self-signed Certificate]]
+      - model: authentik_core.application
+        identifiers:
+          slug: argocd
+        attrs:
+          name: ArgoCD
+          provider: !KeyOf argocd-provider
+
+      # PROXY FORWARD AUTH
+      - model: authentik_providers_proxy.proxyprovider
+        id: prometheus-proxy
+        identifiers:
+          name: prometheus
+        attrs:
+          authorization_flow: !Find [authentik_flows.flow, [slug, default-provider-authorization-implicit-consent]]
+          invalidation_flow: !Find [authentik_flows.flow, [slug, default-provider-invalidation-flow]]
+          external_host: https://prometheus.nonprod.freecloudinitiative.test
+          mode: forward_single
+      - model: authentik_core.application
+        identifiers:
+          slug: prometheus
+        attrs:
+          name: Prometheus
+          provider: !KeyOf prometheus-proxy
+
+      - model: authentik_providers_proxy.proxyprovider
+        id: alloy-proxy
+        identifiers:
+          name: alloy
+        attrs:
+          authorization_flow: !Find [authentik_flows.flow, [slug, default-provider-authorization-implicit-consent]]
+          invalidation_flow: !Find [authentik_flows.flow, [slug, default-provider-invalidation-flow]]
+          external_host: https://alloy.nonprod.freecloudinitiative.test
+          mode: forward_single
+      - model: authentik_core.application
+        identifiers:
+          slug: alloy
+        attrs:
+          name: Alloy
+          provider: !KeyOf alloy-proxy
+
+      - model: authentik_providers_proxy.proxyprovider
+        id: longhorn-proxy
+        identifiers:
+          name: longhorn
+        attrs:
+          authorization_flow: !Find [authentik_flows.flow, [slug, default-provider-authorization-implicit-consent]]
+          invalidation_flow: !Find [authentik_flows.flow, [slug, default-provider-invalidation-flow]]
+          external_host: https://longhorn.nonprod.freecloudinitiative.test
+          mode: forward_single
+      - model: authentik_core.application
+        identifiers:
+          slug: longhorn
+        attrs:
+          name: Longhorn
+          provider: !KeyOf longhorn-proxy
+  enrollment.yaml: |
+    version: 1
+    metadata:
+      name: Free Cloud Initiative self-service enrollment
+      labels:
+        blueprints.goauthentik.io/instantiate: "true"
+    entries:
+      # Checks the two password prompts match. authentik ships no built-in
+      # policy for this -- every "add a signup flow" example defines its own
+      # tiny expression policy, so this mirrors that pattern.
+      - model: authentik_policies_expression.expressionpolicy
+        id: enrollment-password-match-policy
+        identifiers:
+          name: enrollment-password-match
+        attrs:
+          expression: |
+            return request.context.get('prompt_data', {}).get('password') == request.context.get('prompt_data', {}).get('password_repeat')
+
+      - model: authentik_stages_prompt.prompt
+        id: enrollment-prompt-username
+        identifiers:
+          field_key: username
+          name: enrollment-username
+        attrs:
+          label: Username
+          type: username
+          required: true
+          placeholder: Username
+          order: 0
+      - model: authentik_stages_prompt.prompt
+        id: enrollment-prompt-name
+        identifiers:
+          field_key: name
+          name: enrollment-name
+        attrs:
+          label: Name
+          type: text
+          required: true
+          placeholder: Name
+          order: 1
+      - model: authentik_stages_prompt.prompt
+        id: enrollment-prompt-email
+        identifiers:
+          field_key: email
+          name: enrollment-email
+        attrs:
+          label: Email
+          type: email
+          required: true
+          placeholder: Email
+          order: 2
+      - model: authentik_stages_prompt.prompt
+        id: enrollment-prompt-password
+        identifiers:
+          field_key: password
+          name: enrollment-password
+        attrs:
+          label: Password
+          type: password
+          required: true
+          placeholder: Password
+          order: 3
+      - model: authentik_stages_prompt.prompt
+        id: enrollment-prompt-password-repeat
+        identifiers:
+          field_key: password_repeat
+          name: enrollment-password-repeat
+        attrs:
+          label: Password (repeat)
+          type: password
+          required: true
+          placeholder: Repeat password
+          order: 4
+
+      - model: authentik_stages_prompt.promptstage
+        id: enrollment-prompt-stage
+        identifiers:
+          name: enrollment-details-prompt
+        attrs:
+          fields:
+            - !KeyOf enrollment-prompt-username
+            - !KeyOf enrollment-prompt-name
+            - !KeyOf enrollment-prompt-email
+            - !KeyOf enrollment-prompt-password
+            - !KeyOf enrollment-prompt-password-repeat
+          validation_policies:
+            - !KeyOf enrollment-password-match-policy
+
+      - model: authentik_stages_user_write.userwritestage
+        id: enrollment-user-write-stage
+        identifiers:
+          name: enrollment-user-write
+
+      - model: authentik_stages_user_login.userloginstage
+        id: enrollment-user-login-stage
+        identifiers:
+          name: enrollment-user-login
+
+      - model: authentik_flows.flow
+        id: enrollment-flow
+        identifiers:
+          slug: default-enrollment-flow
+        attrs:
+          name: Free Cloud Initiative signup
+          title: Welcome to Free Cloud Initiative!
+          designation: enrollment
+          authentication: require_unauthenticated
+
+      - model: authentik_flows.flowstagebinding
+        identifiers:
+          target: !KeyOf enrollment-flow
+          stage: !KeyOf enrollment-prompt-stage
+        attrs:
+          order: 10
+      - model: authentik_flows.flowstagebinding
+        identifiers:
+          target: !KeyOf enrollment-flow
+          stage: !KeyOf enrollment-user-write-stage
+        attrs:
+          order: 20
+      - model: authentik_flows.flowstagebinding
+        identifiers:
+          target: !KeyOf enrollment-flow
+          stage: !KeyOf enrollment-user-login-stage
+        attrs:
+          order: 30
+
+      # Without this, a login or signup started directly at
+      # auth.nonprod.freecloudinitiative.test (no app/client_id context -- exactly
+      # what a fresh signup is, since the enrollment flow above runs on
+      # this domain with no redirect_uri) lands on authentik's own "My
+      # applications" page instead of the app. Setting the default Brand's
+      # default_application makes authentik immediately continue into this
+      # application's own OIDC flow, which lands the user back on
+      # nonprod.freecloudinitiative.test/callback like a normal login does.
+      - model: authentik_flows.flow
+        identifiers:
+          slug: default-authentication-flow
+        attrs:
+          name: Free Cloud Initiative
+          title: Free Cloud Initiative
+          designation: authentication
+          authentication: none
+
+      - model: authentik_brands.brand
+        identifiers:
+          domain: authentik-default
+        attrs:
+          branding_title: Free Cloud Initiative
+          # Keep authentik visibly credited while the surrounding experience
+          # follows the frontend's terminal-style visual language.
+          branding_logo: /static/dist/assets/icons/icon_left_brand.svg
+          branding_custom_css: |
+            :root {
+              color-scheme: dark;
+              --fci-bg: #000000;
+              --fci-panel: #02070b;
+              --fci-border: #1e5b8f;
+              --fci-border-bright: #4fa8dc;
+              --fci-text: #d7e3eb;
+              --fci-muted: #7990a0;
+              --fci-accent: #4fa8dc;
+              /* Matches frontend/src/pages/tui-dashboard.css's
+                 --dash-input-bg -- the same "recessed terminal box" look
+                 the app's own service-search inputs use, rather than a
+                 flat transparent field sitting on the panel background. */
+              --fci-input-bg: #0d0d0d;
+              --pf-global--FontFamily--sans-serif: "Courier New", Courier, monospace;
+              --pf-global--BackgroundColor--dark-100: var(--fci-bg);
+              --pf-global--BackgroundColor--100: var(--fci-panel);
+              --pf-global--primary-color--100: var(--fci-accent);
+              --pf-t--global--font--family--body: "Courier New", Courier, monospace;
+              --pf-t--global--background--color--primary--default: var(--fci-bg);
+              --pf-t--global--color--brand--default: var(--fci-accent);
+            }
+
+            html,
+            body {
+              background: var(--fci-bg) !important;
+              color: var(--fci-text) !important;
+              font-family: "Courier New", Courier, monospace !important;
+            }
+
+            ak-flow-executor::part(login) {
+              min-height: 100dvh;
+              background: var(--fci-bg) !important;
+              background-image: none !important;
+              color: var(--fci-text);
+              font-family: "Courier New", Courier, monospace;
+            }
+
+            ak-flow-executor::part(main) {
+              position: relative;
+              width: min(420px, calc(100vw - 32px));
+              margin: auto;
+              padding: 34px 28px 26px;
+              background: var(--fci-panel) !important;
+              border: 1px solid var(--fci-border);
+              border-radius: 6px;
+              box-shadow: 0 0 28px rgba(30, 91, 143, 0.18);
+            }
+
+            ak-flow-executor::part(main)::before {
+              content: "FREE CLOUD INITIATIVE";
+              position: absolute;
+              top: -9px;
+              left: 16px;
+              padding: 0 7px;
+              background: var(--fci-bg);
+              color: var(--fci-accent);
+              font-size: 12px;
+              letter-spacing: 0.12em;
+            }
+
+            ak-flow-executor::part(branding) {
+              display: none !important;
+            }
+
+            ak-flow-executor::part(header) {
+              display: none !important;
+            }
+
+            .pf-c-title,
+            .pf-v5-c-title,
+            .pf-v6-c-title {
+              display: none !important;
+            }
+
+            ak-flow-executor::part(challenge) {
+              color: var(--fci-text);
+            }
+
+            ak-flow-executor::part(locale-select) {
+              display: none;
+            }
+
+            ak-flow-executor::part(footer) {
+              background: transparent !important;
+              color: var(--fci-muted);
+              font-family: "Courier New", Courier, monospace;
+            }
+
+            .pf-c-login,
+            .pf-c-login__main,
+            .pf-c-card,
+            .pf-v5-c-card,
+            .pf-v6-c-card {
+              background: transparent !important;
+              color: var(--fci-text) !important;
+              font-family: "Courier New", Courier, monospace !important;
+            }
+
+            h1,
+            h2,
+            h3,
+            p,
+            label,
+            legend {
+              color: var(--fci-text) !important;
+              font-family: "Courier New", Courier, monospace !important;
+              letter-spacing: 0.035em;
+            }
+
+            .pf-c-form__group,
+            .pf-v5-c-form__group,
+            .pf-v6-c-form__group {
+               position: relative;
+               border: 1px solid var(--fci-border) !important;
+               border-radius: 6px !important;
+               padding: 16px 10px 8px 10px !important;
+               background: var(--fci-bg) !important;
+               margin-top: 24px !important;
+               margin-bottom: 24px !important;
+               transition: border-color 0.15s, box-shadow 0.15s;
+            }
+
+            .pf-c-form__group:focus-within,
+            .pf-v5-c-form__group:focus-within,
+            .pf-v6-c-form__group:focus-within {
+               border-color: var(--fci-border-bright) !important;
+               box-shadow: 0 0 10px rgba(79, 168, 220, 0.15) !important;
+            }
+
+            /* .pf-c-form__group.pf-m-action wraps the submit button using
+               the same class as real form fields, so it was getting the
+               same bordered box above -- nesting the button's own border
+               inside it and producing a double-outline "Log in" button.
+               It isn't a field; it never needs the box. */
+            .pf-c-form__group.pf-m-action,
+            .pf-v5-c-form__group.pf-m-action,
+            .pf-v6-c-form__group.pf-m-action {
+               border: none !important;
+               padding: 0 !important;
+               background: transparent !important;
+            }
+
+            .pf-c-form__group-label,
+            .pf-v5-c-form__group-label,
+            .pf-v6-c-form__group-label {
+               display: inline-block !important;
+               background: var(--fci-bg) !important;
+               padding: 0 6px !important;
+               margin-top: -10px !important;
+               margin-left: 2px !important;
+               margin-bottom: 8px !important;
+            }
+
+            /* Sit the label directly on the box's top border, cutting a gap
+               into the line, the same way the panel title
+               (ak-flow-executor::part(main)::before, "FREE CLOUD
+               INITIATIVE") sits on the outer panel border. */
+            .pf-c-form__label,
+            .pf-v5-c-form__label,
+            .pf-v6-c-form__label {
+               position: absolute !important;
+               top: -9px !important;
+               left: 8px !important;
+               color: var(--fci-accent) !important;
+               font-size: 11px !important;
+               letter-spacing: 0.05em !important;
+               font-weight: normal !important;
+               display: inline-block !important;
+               background: var(--fci-bg) !important;
+               margin: 0 !important;
+               padding: 0 7px !important;
+            }
+
+            /* The visible label text isn't on the <label> itself but on a
+               nested <span class="pf-c-form__label-text"> -- authentik's
+               own dark-theme stylesheet sets that span's color directly
+               (:is([data-theme="dark"]) .pf-c-form__label-text), which
+               beats the rule above by specificity since it targets the
+               span, not an ancestor. Match the panel-title look (small,
+               accent-colored, letter-spaced) here explicitly instead of
+               relying on inheritance from .pf-c-form__label. */
+            .pf-c-form__label-text {
+               color: var(--fci-accent) !important;
+               font-size: 11px !important;
+               font-weight: normal !important;
+               letter-spacing: 0.05em !important;
+            }
+
+            .pf-c-form__label-required {
+               color: #e0546a;
+               margin-left: 4px;
+            }
+
+            .pf-c-form__group-control,
+            .pf-v5-c-form__group-control,
+            .pf-v6-c-form__group-control {
+               width: 100%;
+            }
+
+            /* frontend/src/pages/tui-dashboard.css's .fci-terminal-input /
+               .fci-service-search: a recessed dark box (not flat
+               transparent-on-panel), monospace, small line-height, slight
+               letter-spacing, italic dim placeholder, blinking block
+               cursor. The dashboard's own cursor is a fake ::after element
+               whose position a React wrapper recomputes from every
+               keystroke -- not portable to authentik's CSS-only
+               branding_custom_css -- but caret-shape: block turns out to
+               be supported in current Chromium and gives a real,
+               natively-tracking block caret for free with none of that
+               complexity: confirmed via CSS.supports('caret-shape',
+               'block') and by typing into the live field, where the block
+               correctly follows the text as typed rather than only
+               showing on an empty field. Browsers without support just
+               keep the default thin caret -- this can't visually break. */
+            input,
+            select,
+            textarea {
+              background: var(--fci-input-bg) !important;
+              border: none !important;
+              border-radius: 2px !important;
+              color: var(--fci-text) !important;
+              font-family: "Courier New", Courier, monospace !important;
+              box-shadow: none !important;
+              padding: 4px 6px !important;
+              line-height: 1.2 !important;
+              letter-spacing: 0.02em !important;
+              caret-color: var(--fci-accent) !important;
+              caret-shape: block;
+              /* input's width:100% is a content-box width by default, so
+                 without this it added its own left+right padding on top
+                 of 100% of the group's content area and overflowed past
+                 the group's right padding and border. */
+              box-sizing: border-box !important;
+              width: 100% !important;
+            }
+
+            input::placeholder,
+            textarea::placeholder {
+              color: var(--fci-muted) !important;
+              font-style: italic !important;
+              opacity: 1 !important;
+            }
+
+            input:focus,
+            select:focus,
+            textarea:focus {
+              box-shadow: none !important;
+              outline: none !important;
+            }
+
+            button,
+            .pf-c-button,
+            .pf-v5-c-button,
+            .pf-v6-c-button {
+              background: var(--fci-bg) !important;
+              border: 1px solid var(--fci-border) !important;
+              border-radius: 4px !important;
+              color: var(--fci-accent) !important;
+              font-family: "Courier New", Courier, monospace !important;
+              font-weight: 700 !important;
+              letter-spacing: 0.055em;
+              box-shadow: none !important;
+            }
+
+            button:hover,
+            button:focus-visible,
+            .pf-c-button:hover,
+            .pf-v5-c-button:hover,
+            .pf-v6-c-button:hover {
+              background: #0d1b2a !important;
+              border-color: var(--fci-border-bright) !important;
+              color: #ffffff !important;
+            }
+
+            a {
+              color: var(--fci-accent) !important;
+              font-family: "Courier New", Courier, monospace !important;
+            }
+
+            ak-brand-links {
+              color: var(--fci-muted);
+              font-family: "Courier New", Courier, monospace;
+            }
+
+            /* The "you're continuing as <user>" row shown on the password
+               stage (after identification) and on the post-logout screen
+               is <ak-form-static>, a web component with its own shadow
+               root -- its internal .pf-c-avatar/.username/.links classes
+               are unstyled by anything above since nothing here targets
+               them. Reached the same way every other cross-shadow-root fix
+               in this file works: the branding stylesheet is shared via
+               adoptedStyleSheets across every authentik web component, not
+               scoped to one shadow root, so plain class selectors here
+               still apply inside ak-form-static's shadow DOM. */
+            ak-form-static {
+              display: block !important;
+              border: 1px solid var(--fci-border) !important;
+              border-radius: 6px !important;
+              padding: 10px !important;
+              margin-bottom: 24px !important;
+              background: var(--fci-bg) !important;
+            }
+
+            .primary-content {
+              display: flex !important;
+              align-items: center !important;
+              gap: 10px !important;
+            }
+
+            .pf-c-avatar {
+              border-radius: 2px !important;
+              border: 1px solid var(--fci-border) !important;
+            }
+
+            .username {
+              color: var(--fci-text) !important;
+              font-family: "Courier New", Courier, monospace !important;
+              font-weight: 700 !important;
+              letter-spacing: 0.02em !important;
+            }
+
+            /* Unqualified, unlike the ak-form-static rule above: this
+               stylesheet is also adopted directly into ak-form-static's
+               OWN shadow root, and evaluated there the host element isn't
+               an ancestor of .links inside its own tree (only reachable
+               via :host) -- "ak-form-static .links" would silently never
+               match. */
+            .links {
+              font-size: 13px !important;
+            }
+
+            /* The "Not you?" <a> itself isn't in this tree either -- it's
+               assigned to .links's <slot name="link"> from ak-form-static's
+               light DOM (a real child of ak-form-static in the parent
+               ak-flow-card shadow root). "a" would only match a node that
+               actually exists in the tree the stylesheet is currently
+               evaluated against; slotted content needs ::slotted()
+               specifically to reach across that boundary. */
+            .links ::slotted(a) {
+              color: var(--fci-accent) !important;
+              font-family: "Courier New", Courier, monospace !important;
+              text-decoration: none !important;
+            }
+
+            .links ::slotted(a:hover) {
+              color: #ffffff !important;
+            }
+
+            /* Footer layout for Google & Sign Up buttons side-by-side */
+            .pf-c-login__main-footer,
+            .pf-v5-c-login__main-footer,
+            .pf-v6-c-login__main-footer {
+              display: grid !important;
+              grid-template-columns: 1fr 1fr;
+              gap: 8px;
+              margin-top: 24px !important;
+              /* The Sign Up link isn't in a flex container that honors its
+                 own flex:1 (see .pf-c-login__main-footer-band-item below),
+                 so it never grows to fill a stretched row -- center both
+                 columns on their natural (equal, once reset below) height
+                 instead of stretching the row to the taller column. */
+              align-items: center;
+            }
+
+            /* The Google source button actually ships in a
+               <fieldset slot="footer" class="ak-c-fieldset pf-c-form__group">
+               -- there is no .pf-c-login__main-footer-links wrapper in this
+               authentik version, so every selector that targeted that class
+               below never matched anything. The fieldset instead fell
+               through to the generic .pf-c-form__group rule above (border
+               plus padding/margin meant for actual form fields), producing
+               an oversized outer box around a small, unstyled button while
+               "Sign up." rendered correctly next to it. Target the real
+               elements instead: the attribute selector out-specifies the
+               generic class rule regardless of source order. */
+            fieldset[slot="footer"],
+            fieldset.ak-c-fieldset[slot="footer"] {
+               border: none !important;
+               padding: 0 !important;
+               margin: 0 !important;
+               background: transparent !important;
+               display: flex !important;
+               height: auto !important;
+            }
+
+            .pf-c-login__main-footer-band,
+            .pf-v5-c-login__main-footer-band,
+            .pf-v6-c-login__main-footer-band {
+               /* <fieldset> has a UA-default border and padding that
+                  neither this stylesheet nor the browser reset above
+                  cleared -- it was invisible before because the mismatched
+                  Google button box was even bigger, but with that fixed
+                  this fieldset's own border/padding shows up as a second,
+                  larger box around "Sign up.", with the actual link
+                  floating inside it rather than filling the grid column. */
+               border: none !important;
+               padding: 0 !important;
+               margin: 0 !important;
+               font-size: 0 !important; /* Hide "Need an account?" */
+               display: flex;
+               height: auto !important;
+            }
+
+            .pf-c-login__main-footer-band-item {
+               margin: 0 !important;
+               display: flex;
+               width: 100%;
+               height: auto !important;
+            }
+
+            .source-button {
+               width: 100% !important;
+               /* Anchor for the icon and ::after text below, both
+                  explicitly absolutely positioned. */
+               position: relative !important;
+               /* The Google button has a 16px icon; Sign Up is text only.
+                  Left to size on content alone the two buttons never land
+                  on the same height, so both get an explicit shared
+                  min-height instead. */
+               min-height: 38px !important;
+               height: auto !important;
+               display: flex !important;
+               justify-content: center !important;
+               align-items: center !important;
+               padding: 6px 16px !important;
+               gap: 10px !important;
+               box-sizing: border-box !important;
+               background: var(--fci-bg) !important;
+               border: 1px solid var(--fci-border) !important;
+               border-radius: 4px !important;
+               color: var(--fci-accent) !important;
+               font-family: "Courier New", Courier, monospace !important;
+               font-weight: 700 !important;
+               letter-spacing: 0.055em;
+               box-shadow: none !important;
+            }
+
+            .source-button:hover {
+               background: #0d1b2a !important;
+               border-color: var(--fci-border-bright) !important;
+               color: #ffffff !important;
+            }
+
+            /* This icon and the ::after text below are both explicitly
+               positioned rather than left to lay out in the button's flex
+               row. Generated content (::after) in this PatternFly build
+               computes to position:absolute against .source-button (no
+               single rule sets it directly -- every stylesheet was
+               searched -- but per the Flexbox spec an absolutely
+               positioned flex child is placed at a "static position"
+               derived from the container's justify-content/align-items,
+               which here is dead center on both axes). With the icon left
+               as a normal in-flow flex item, it also flex-centers itself
+               (as the only flow child) landing on that exact same point,
+               so icon and text stacked exactly on top of each other
+               instead of sitting side by side. Positioning both explicitly
+               removes the ambiguity instead of fighting it. */
+            .source-button img[part="source-icon"] {
+               position: absolute !important;
+               left: 16px !important;
+               top: 50% !important;
+               transform: translateY(-50%) !important;
+               margin: 0 !important;
+               width: 16px;
+               height: 16px;
+               filter: grayscale(100%) contrast(200%) brightness(1.6);
+            }
+
+            .source-button::after {
+               content: "Sign in";
+               position: absolute !important;
+               left: 0 !important;
+               right: 0 !important;
+               top: 50% !important;
+               transform: translateY(-50%) !important;
+               text-align: center !important;
+               font-size: 14px !important;
+               font-family: "Courier New", Courier, monospace !important;
+               color: var(--fci-accent) !important;
+               line-height: 1 !important;
+            }
+
+            .source-button:hover::after {
+               color: #ffffff !important;
+            }
+
+            .pf-c-login__main-footer-band a,
+            .pf-v5-c-login__main-footer-band a,
+            .pf-v6-c-login__main-footer-band a {
+               /* authentik's own translated string is "Sign up." with a
+                  trailing period -- there's no separate element for just
+                  the label to target, so hide the real text the same way
+                  the parent fieldset already hides "Need an account? "
+                  (font-size: 0) and substitute clean text via ::after,
+                  the same pattern .source-button uses for its own label. */
+               font-size: 0 !important;
+               position: relative;
+               flex: 1;
+               display: flex;
+               justify-content: center;
+               align-items: center;
+               padding: 6px 16px !important;
+               box-sizing: border-box !important;
+               /* Match .source-button's explicit min-height -- see the
+                  comment there for why content-based sizing alone leaves
+                  this shorter than the Google button. */
+               min-height: 38px !important;
+
+               background: var(--fci-bg) !important;
+               border: 1px solid var(--fci-border) !important;
+               border-radius: 4px !important;
+               color: var(--fci-accent) !important;
+               font-family: "Courier New", Courier, monospace !important;
+               font-weight: 700 !important;
+               letter-spacing: 0.055em;
+               text-decoration: none !important;
+               box-shadow: none !important;
+            }
+
+            .pf-c-login__main-footer-band a::after,
+            .pf-v5-c-login__main-footer-band a::after,
+            .pf-v6-c-login__main-footer-band a::after {
+               content: "Sign up";
+               position: absolute !important;
+               left: 0 !important;
+               right: 0 !important;
+               top: 50% !important;
+               transform: translateY(-50%) !important;
+               text-align: center !important;
+               font-size: 14px !important;
+               font-family: "Courier New", Courier, monospace !important;
+               color: var(--fci-accent) !important;
+               line-height: 1 !important;
+            }
+
+            .pf-c-login__main-footer-band a:hover::after,
+            .pf-v5-c-login__main-footer-band a:hover::after,
+            .pf-v6-c-login__main-footer-band a:hover::after {
+               color: #ffffff !important;
+            }
+
+            .pf-c-login__main-footer-band a:hover,
+            .pf-v5-c-login__main-footer-band a:hover,
+            .pf-v6-c-login__main-footer-band a:hover {
+               background: #0d1b2a !important;
+               border-color: var(--fci-border-bright) !important;
+               color: #ffffff !important;
+            }
+
+            @media (max-width: 560px) {
+              ak-flow-executor::part(main) {
+                width: calc(100vw - 24px);
+                padding: 30px 20px 22px;
+              }
+            }
+          attributes:
+            settings:
+              locale: en
+              theme:
+                base: dark
+          default_application: !Find [authentik_core.application, [slug, freecloudinitiative]]
+
+      # Enable local self-service enrollment. External social login is
+      # intentionally absent: this environment has no public DNS callback.
+      # state: present + matching identifiers updates this existing built-in
+      # object, so user_fields has to be repeated even though it is unchanged.
+      - model: authentik_stages_identification.identificationstage
+        identifiers:
+          name: default-authentication-identification
+        attrs:
+          user_fields:
+            - email
+            - username
+          enrollment_flow: !KeyOf enrollment-flow
+          sources: []

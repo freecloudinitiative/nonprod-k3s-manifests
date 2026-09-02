@@ -1,0 +1,52 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: external-secrets-config
+  namespace: argocd
+  annotations:
+    # OpenBao is installed and healthy at parent wave 2. Only then create its
+    # ClusterSecretStore and the ExternalSecrets that depend on it.
+    argocd.argoproj.io/sync-wave: "3"
+    argocd.argoproj.io/sync-wave-health: all
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/freecloudinitiative/nonprod-k3s-manifests.git
+    targetRevision: main
+    path: infrastructure/external-secrets
+    directory:
+      include: '{cluster-store.yaml,service-account.yaml,rbac.yaml,external-secret-*.yaml}'
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: external-secrets
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+      allowEmpty: true
+    retry:
+      # OpenBao initialization/unseal can legitimately outlast Argo CD's
+      # default retry window during a fresh cluster bootstrap.
+      limit: -1
+      backoff:
+        duration: 10s
+        factor: 2
+        maxDuration: 2m
+    syncOptions:
+      - ServerSideApply=true
+      - SkipDryRunOnMissingResource=true
+      - CreateNamespace=true
+  # The external-secrets.io/v1 ExternalSecret CRD schema sets these three
+  # remoteRef fields to their defaults server-side on every create/update
+  # (conversionStrategy: Default, decodingStrategy: None, metadataPolicy:
+  # None). Git never sets them, so without this the app is permanently
+  # OutOfSync even immediately after a successful sync.
+  ignoreDifferences:
+    - group: external-secrets.io
+      kind: ExternalSecret
+      jqPathExpressions:
+        - '.spec.data[]?.remoteRef.conversionStrategy'
+        - '.spec.data[]?.remoteRef.decodingStrategy'
+        - '.spec.data[]?.remoteRef.metadataPolicy'

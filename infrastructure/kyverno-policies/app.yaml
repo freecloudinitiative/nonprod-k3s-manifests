@@ -1,0 +1,43 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: kyverno-policies
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+    argocd.argoproj.io/sync-wave-health: all
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/freecloudinitiative/nonprod-k3s-manifests.git
+    targetRevision: main
+    path: infrastructure/kyverno-policies
+    directory:
+      exclude: 'app.yaml'
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: kyverno
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+      allowEmpty: true
+    syncOptions:
+      - ServerSideApply=true
+      - SkipDryRunOnMissingResource=true
+  # Kyverno's own controller back-fills deprecated/defaulted fields onto
+  # every ClusterPolicy after admission (admission, emitWarning,
+  # skipBackgroundRequests, allowExistingViolations, and the deprecated
+  # top-level validationFailureAction). None of these are set in git, so
+  # the app is permanently OutOfSync without ignoring them.
+  ignoreDifferences:
+    - group: kyverno.io
+      kind: ClusterPolicy
+      jqPathExpressions:
+        - '.spec.admission'
+        - '.spec.emitWarning'
+        - '.spec.validationFailureAction'
+        - '.spec.rules[]?.skipBackgroundRequests'
+        - '.spec.rules[]?.validate.allowExistingViolations'

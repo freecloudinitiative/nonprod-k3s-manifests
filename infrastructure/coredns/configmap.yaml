@@ -1,0 +1,21 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: coredns-custom
+  namespace: kube-system
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+data:
+  # K3s imports *.server fragments from coredns-custom. Browser clients use
+  # their hosts file, while in-cluster OAuth clients need the same names to
+  # reach Traefik without any public or Route 53 DNS record.
+  nonprod.server: |
+    nonprod.freecloudinitiative.test:53 {
+      errors
+      cache 30
+      rewrite stop {
+        name regex (.*\.)?nonprod\.freecloudinitiative\.test traefik.traefik.svc.cluster.local
+        answer auto
+      }
+      kubernetes cluster.local in-addr.arpa ip6.arpa
+    }

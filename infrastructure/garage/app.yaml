@@ -1,0 +1,50 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: garage
+  namespace: argocd
+  annotations:
+    # external-secrets-config is wave 3 and must first materialize the
+    # OpenBao-backed Garage bootstrap credentials.
+    argocd.argoproj.io/sync-wave: "4"
+    argocd.argoproj.io/sync-wave-health: all
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  sources:
+    # The upstream chart is not published in a Helm repository. Pin the exact
+    # source commit so a branch update cannot mutate a production deployment.
+    - repoURL: https://git.deuxfleurs.fr/Deuxfleurs/garage.git
+      targetRevision: c3c8af9a66714c5697f6fd123d2e9b5b32027772
+      path: script/helm/garage
+      helm:
+        valueFiles:
+          - $values/infrastructure/garage/values.yaml
+    - repoURL: https://github.com/freecloudinitiative/nonprod-k3s-manifests.git
+      targetRevision: main
+      path: infrastructure/garage
+      ref: values
+      directory:
+        include: '{rpc-secret.yaml,networkpolicy.yaml,bootstrap-script-configmap.yaml,bootstrap-job.yaml}'
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: garage
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    # A fresh cluster can reach this application before External Secrets has
+    # authenticated to OpenBao. Keep retrying the same Git revision after the
+    # bootstrap credential becomes available; automated sync alone does not
+    # retry a revision whose initial operation exhausted its retry window.
+    retry:
+      limit: -1
+      backoff:
+        duration: 10s
+        factor: 2
+        maxDuration: 2m
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true
+      - SkipDryRunOnMissingResource=true

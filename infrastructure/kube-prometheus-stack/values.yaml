@@ -1,0 +1,116 @@
+prometheus:
+  prometheusSpec:
+    image:
+      repository: prometheus/prometheus
+      tag: v3.13.2
+    externalUrl: "/prometheus/"
+    routePrefix: /prometheus
+    serviceMonitorSelectorNilUsesHelmValues: false
+    retention: 14d
+    storageSpec:
+      volumeClaimTemplate:
+        spec:
+          storageClassName: local-path
+          accessModes: ["ReadWriteOnce"]
+          resources:
+            requests:
+              storage: 10Gi
+    resources:
+      requests:
+        cpu: 150m
+        memory: 500Mi
+      limits:
+        cpu: 1000m
+        memory: 1.5Gi
+
+grafana:
+  enabled: true
+  image:
+    repository: grafana/grafana
+    tag: 13.1.3
+  admin:
+    existingSecret: grafana-secrets
+    userKey: admin-user
+    passwordKey: admin-password
+  persistence:
+    enabled: true
+    storageClassName: local-path
+    size: 5Gi
+  envFromSecret: "grafana-secrets"
+  additionalDataSources:
+    - name: Loki
+      type: loki
+      uid: loki
+      url: http://loki-external.monitoring.svc.cluster.local:3100
+      access: proxy
+      isDefault: false
+      jsonData:
+        maxLines: 1000
+        derivedFields:
+          - name: TraceID
+            matcherRegex: "(?:trace_id|traceId|traceID)=(\\w+)"
+            url: "$${__value.raw}"
+            datasourceUid: tempo
+    - name: Tempo
+      type: tempo
+      uid: tempo
+      url: http://tempo-external.monitoring.svc.cluster.local:3100
+      access: proxy
+      isDefault: false
+      jsonData:
+        httpMethod: GET
+        tracesToLogsV2:
+          datasourceUid: loki
+          spanStartTimeShift: "-1h"
+          spanEndTimeShift: "1h"
+          tags: ['job', 'instance', 'pod', 'namespace', 'app']
+          filterByTraceID: true
+          filterBySpanID: false
+          customQuery: true
+          query: '{app="${__tags.app}"} |= "${__trace.id}"'
+        serviceMap:
+          datasourceUid: prometheus
+        nodeGraph:
+          enabled: true
+    - name: Alloy
+      type: prometheus
+      uid: alloy
+      url: http://alloy.monitoring.svc.cluster.local:12345/alloy
+      access: proxy
+      isDefault: false
+      jsonData:
+        httpMethod: GET
+        timeInterval: "15s"
+  grafana.ini:
+    database:
+      wal: true
+      cache_mode: shared
+    server:
+      root_url: "%(protocol)s://%(domain)s/grafana/"
+      serve_from_sub_path: true
+    auth.generic_oauth:
+      enabled: true
+      name: Authentik
+      icon: signin
+      client_id: grafana-oidc
+      client_secret: "${OIDC_CLIENT_SECRET}"
+      scopes: openid profile email
+      empty_scopes: false
+      auth_url: https://auth.nonprod.freecloudinitiative.test/application/o/authorize/
+      token_url: https://auth.nonprod.freecloudinitiative.test/application/o/token/
+      api_url: https://auth.nonprod.freecloudinitiative.test/application/o/userinfo/
+      allow_sign_up: true
+      role_attribute_path: "contains(groups[*], 'grafana-admins') && 'Admin' || 'Viewer'"
+
+prometheus-node-exporter:
+  enabled: true
+
+kube-state-metrics:
+  enabled: true
+
+prometheusOperator:
+  admissionWebhooks:
+    certManager:
+      enabled: true
+    patch:
+      enabled: false

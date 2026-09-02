@@ -1,0 +1,23 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: tempo-external
+  namespace: monitoring
+  labels:
+    app.kubernetes.io/name: tempo
+spec:
+  # K3s ServiceLB is disabled and this AWS cluster has no cloud controller.
+  # Keep observability endpoints private; browser access goes through Traefik.
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: tempo
+  ports:
+    - port: 3100
+      targetPort: 3100
+      name: http-query
+    - port: 4317
+      targetPort: 4317
+      name: otlp-grpc
+    - port: 4318
+      targetPort: 4318
+      name: otlp-http

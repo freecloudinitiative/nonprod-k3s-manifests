@@ -1,0 +1,13 @@
+name: PR Checker
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    types: [opened, synchronize, reopened]
+    branches: [main, master]
+  workflow_dispatch:
+
+jobs:
+  check:
+    uses: freecloudinitiative/.github/.github/workflows/k3s-pr-checker.yml@main
+    secrets: inherit

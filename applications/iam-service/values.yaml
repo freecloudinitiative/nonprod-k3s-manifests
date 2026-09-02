@@ -1,0 +1,186 @@
+# iam-service — Helm values.
+#
+# Mirrors the environment variables declared in
+# internal/config/config.go (embeds platform-common config.Base).
+#
+# Note: iam-service never calls the Kubernetes API — automountServiceAccountToken
+# is intentionally false here (contrast compute-service and storage-service).
+
+replicaCount: 2
+revisionHistoryLimit: 3
+
+image:
+  # CI pushes to ghcr.io/freecloudinitiative/<name>:sha-<40-hex> (see
+  # iam-service/.github/workflows/build-and-push.yml, step "Derive
+  # image tags").  The tag or digest MUST be supplied by the caller (e.g.
+  # ArgoCD Application helm.parameters, which prefers image.digest) — an
+  # empty tag is a hard error in
+  # applications/iam-service/templates/_helpers.tpl.  Never falls back to Chart.appVersion.
+  repository: ghcr.io/freecloudinitiative/iam-service
+  tag: ""
+  digest: ""
+  pullPolicy: IfNotPresent
+
+# imagePullSecrets is required: ghcr.io/freecloudinitiative sits behind
+# Traefik's basicAuth middleware. Create a Secret of type
+# kubernetes.io/dockerconfigjson with credentials for the registry and
+# reference it here.
+imagePullSecrets: []
+
+nameOverride: ""
+fullnameOverride: ""
+
+logLevel: info
+
+service:
+  type: ClusterIP
+  port: 80
+  containerPort: 8080
+  metricsPort: 9090
+
+# terminationGracePeriodSeconds must exceed ShutdownGrace (25s default in
+# platform-common) so in-flight requests drain before SIGKILL.
+terminationGracePeriodSeconds: 40
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+    ephemeral-storage: 50Mi
+  limits:
+    cpu: 500m
+    memory: 256Mi
+    ephemeral-storage: 100Mi
+
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 65532
+  runAsGroup: 65532
+  # Secret volume files are owned by root:root unless fsGroup is set; without
+  # it, a non-root container can't read the 0400 authentik-token file it
+  # mounts. Matches database-service's podSecurityContext, the other chart
+  # that mounts its own 0400 secret file.
+  fsGroup: 65532
+  seccompProfile:
+    type: RuntimeDefault
+
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop:
+      - ALL
+
+# iam-service never calls the Kubernetes API. Mounting a token here would
+# only create an extra credential that a compromise could pivot with. Same
+# reasoning for Valkey: no cache client, no Valkey credential mounted.
+automountServiceAccountToken: false
+
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 1
+
+networkPolicy:
+  enabled: true
+
+serviceAccount:
+  create: true
+  name: ""
+  annotations: {}
+
+probes:
+  readiness:
+    initialDelaySeconds: 5
+    periodSeconds: 10
+    failureThreshold: 3
+  liveness:
+    initialDelaySeconds: 10
+    periodSeconds: 20
+    failureThreshold: 3
+
+# Secret references — names of Kubernetes Secrets created by ExternalSecret.
+secrets:
+  # Ed25519 public key used to verify internal JWTs from api-gateway.
+  internalPublicKey:
+    secretName: iam-service-internal-public-key
+    keyName: internal-public.pem
+  # Ed25519 public key from terminal-gateway; accepted on direct session
+  # validation calls that bypass api-gateway.
+  terminalGatewayPublicKey:
+    secretName: terminal-gateway-public-key
+    keyName: internal-public.pem
+  # Ed25519 public keys for compute-service, database-service, and
+  # storage-service's own signing keys, so iam-service can verify the
+  # internal JWTs each mints for its quota route calls.
+  computeServicePublicKey:
+    secretName: compute-service-public-key
+    keyName: internal-public.pem
+  databaseServicePublicKey:
+    secretName: database-service-public-key
+    keyName: internal-public.pem
+  storageServicePublicKey:
+    secretName: storage-service-public-key
+    keyName: internal-public.pem
+  # PostgreSQL TLS CA cert.
+  postgresqlCA:
+    secretName: iam-service-postgresql-ca-cert
+  # PostgreSQL credentials (DSN URL).
+  postgresqlCredentials:
+    secretName: iam-service-postgresql-credentials
+  # Authentik admin API token — optional; a disabled/empty client is nil-safe
+  # throughout iam-service (see internal/authentik/client.go).
+  authentikToken:
+    secretName: iam-service-authentik-token
+    keyName: token
+
+config:
+  logLevel: info
+  environment: production
+  otelEndpoint: opentelemetry-collector.monitoring.svc.cluster.local:4317
+  shutdownGrace: 25s
+  # Authentik OIDC issuer — must match the iss claim in Authentik-minted tokens.
+  # Format: https://<host>/application/o/<slug>/ (trailing slash is load-bearing).
+  authentikIssuer: "https://auth.nonprod.freecloudinitiative.test/application/o/freecloudinitiative/"
+  authentikClientID: "freecloudinitiative-frontend"
+  # Authentik admin API — user/group sync and drift reconciliation. Service
+  # port is 80 (targetPort 9000); see infrastructure/authentik/networkpolicy.yaml
+  # for the corresponding pod-port-9000 ingress rule.
+  authentikUrl: "http://authentik-server.authentik.svc.cluster.local:80"
+  # Must stay below api-gateway's IAM_TIMEOUT (default 5s) — this timeout
+  # bounds one leg of that outer request budget, not the whole request.
+  # Authentik sync is best-effort (failure logs WARN, local row kept); the
+  # background reconciler at authentikReconcileInterval repairs a sync that
+  # timed out, so shrinking this loses nothing durable. Do not fix a slow
+  # Authentik by raising this above the outer budget — raise IAM_TIMEOUT
+  # instead, deliberately, if the budget itself needs to grow.
+  authentikTimeout: 3s
+  authentikReconcileEnabled: true
+  authentikReconcileInterval: 15m
+  authentikReconcileAdopt: true
+  # Authentik group NAMES, not UUIDs — iam-service resolves each name to its
+  # UUID at runtime via GET /api/v3/core/groups/?name=. Names are a
+  # cross-repo contract with infrastructure/authentik/blueprint.yaml's
+  # authentik_core.group identifiers.name; renaming requires changing both.
+  #
+  # Empty stays a supported state — group assignment is skipped, never
+  # fatal. A name that does not resolve yet (blueprint not applied) is
+  # logged and skipped for that pass, then retried automatically — no
+  # restart needed once the blueprint applies.
+  authentikGroupAdmin: "fci-admin"
+  authentikGroupEditor: "fci-editor"
+  authentikGroupViewer: "fci-viewer"
+  authentikGroupAuditor: "fci-auditor"
+
+serviceMonitor:
+  enabled: true
+  interval: 30s
+  namespace: monitoring
+
+prometheusRule:
+  enabled: true
+  namespace: monitoring
+
+podAnnotations: {}
+nodeSelector: {}
+tolerations: []
+affinity: {}

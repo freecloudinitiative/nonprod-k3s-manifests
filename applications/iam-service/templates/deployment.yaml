@@ -1,0 +1,213 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "iam-service.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "iam-service.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  revisionHistoryLimit: {{ .Values.revisionHistoryLimit }}
+  selector:
+    matchLabels:
+      {{- include "iam-service.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "iam-service.labels" . | nindent 8 }}
+      annotations:
+        checksum/config: {{ toYaml .Values | sha256sum }}
+        {{- with .Values.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      serviceAccountName: {{ include "iam-service.serviceAccountName" . }}
+      terminationGracePeriodSeconds: {{ .Values.terminationGracePeriodSeconds }}
+      # iam-service never calls the Kubernetes API — the token mount is
+      # intentionally absent. See values.yaml and storage-service's
+      # serviceaccount.yaml for the contrasting case.
+      automountServiceAccountToken: {{ .Values.automountServiceAccountToken }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: iam-service
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          image: {{ include "iam-service.image" . | quote }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.service.containerPort }}
+              protocol: TCP
+            - name: metrics
+              containerPort: {{ .Values.service.metricsPort }}
+              protocol: TCP
+          env:
+            - name: SERVICE_NAME
+              value: iam-service
+            - name: LOG_LEVEL
+              value: {{ .Values.logLevel | default "info" | quote }}
+            - name: HTTP_PORT
+              value: {{ .Values.service.containerPort | quote }}
+            - name: METRICS_PORT
+              value: {{ .Values.service.metricsPort | quote }}
+            - name: SHUTDOWN_GRACE
+              value: {{ .Values.config.shutdownGrace | quote }}
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.secrets.postgresqlCredentials.secretName }}
+                  key: url
+            - name: DATABASE_SCHEMA
+              value: iam
+            - name: DB_MAX_CONNS
+              value: "10"
+            - name: INTERNAL_PUBLIC_KEY_PATH
+              value: /etc/iam-service/internal/internal-public.pem
+            - name: TERMINAL_GATEWAY_PUBLIC_KEY_PATH
+              value: /etc/iam-service/terminal-gateway/terminal-gateway-public.pem
+            - name: COMPUTE_SERVICE_PUBLIC_KEY_PATH
+              value: /etc/iam-service/compute-service/internal-public.pem
+            - name: DATABASE_SERVICE_PUBLIC_KEY_PATH
+              value: /etc/iam-service/database-service/internal-public.pem
+            - name: STORAGE_SERVICE_PUBLIC_KEY_PATH
+              value: /etc/iam-service/storage-service/internal-public.pem
+            - name: SERVICE_AUDIENCE
+              value: iam-service
+            - name: AUTHENTIK_URL
+              value: {{ .Values.config.authentikUrl | quote }}
+            - name: AUTHENTIK_TOKEN_PATH
+              value: /etc/iam-service/authentik/token
+            - name: AUTHENTIK_TIMEOUT
+              value: {{ .Values.config.authentikTimeout | quote }}
+            - name: AUTHENTIK_GROUP_ADMIN
+              value: {{ .Values.config.authentikGroupAdmin | quote }}
+            - name: AUTHENTIK_GROUP_EDITOR
+              value: {{ .Values.config.authentikGroupEditor | quote }}
+            - name: AUTHENTIK_GROUP_VIEWER
+              value: {{ .Values.config.authentikGroupViewer | quote }}
+            - name: AUTHENTIK_GROUP_AUDITOR
+              value: {{ .Values.config.authentikGroupAuditor | quote }}
+            - name: AUTHENTIK_RECONCILE_ENABLED
+              value: {{ .Values.config.authentikReconcileEnabled | quote }}
+            - name: AUTHENTIK_RECONCILE_INTERVAL
+              value: {{ .Values.config.authentikReconcileInterval | quote }}
+            - name: AUTHENTIK_RECONCILE_ADOPT
+              value: {{ .Values.config.authentikReconcileAdopt | quote }}
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              # bare host:port, no scheme — platform-common rejects a URL scheme for OTLP gRPC
+              value: {{ .Values.config.otelEndpoint | quote }}
+            # Downward API for OTel resource attributes.
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          volumeMounts:
+            - name: postgresql-ca
+              mountPath: /etc/iam-service/postgres
+              readOnly: true
+            - name: internal-public-key
+              mountPath: /etc/iam-service/internal
+              readOnly: true
+            - name: terminal-gateway-public-key
+              mountPath: /etc/iam-service/terminal-gateway
+              readOnly: true
+            - name: compute-service-public-key
+              mountPath: /etc/iam-service/compute-service
+              readOnly: true
+            - name: database-service-public-key
+              mountPath: /etc/iam-service/database-service
+              readOnly: true
+            - name: storage-service-public-key
+              mountPath: /etc/iam-service/storage-service
+              readOnly: true
+            - name: authentik-token
+              mountPath: /etc/iam-service/authentik
+              readOnly: true
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: {{ .Values.probes.liveness.initialDelaySeconds }}
+            periodSeconds: {{ .Values.probes.liveness.periodSeconds }}
+            failureThreshold: {{ .Values.probes.liveness.failureThreshold }}
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: http
+            initialDelaySeconds: {{ .Values.probes.readiness.initialDelaySeconds }}
+            periodSeconds: {{ .Values.probes.readiness.periodSeconds }}
+            failureThreshold: {{ .Values.probes.readiness.failureThreshold }}
+      volumes:
+        - name: postgresql-ca
+          secret:
+            secretName: {{ .Values.secrets.postgresqlCA.secretName }}
+        - name: internal-public-key
+          secret:
+            secretName: {{ .Values.secrets.internalPublicKey.secretName }}
+            items:
+              - key: {{ .Values.secrets.internalPublicKey.keyName }}
+                path: internal-public.pem
+            defaultMode: 0444
+        - name: terminal-gateway-public-key
+          secret:
+            secretName: {{ .Values.secrets.terminalGatewayPublicKey.secretName }}
+            items:
+              - key: {{ .Values.secrets.terminalGatewayPublicKey.keyName }}
+                path: terminal-gateway-public.pem
+            defaultMode: 0444
+        - name: compute-service-public-key
+          secret:
+            secretName: {{ .Values.secrets.computeServicePublicKey.secretName }}
+            items:
+              - key: {{ .Values.secrets.computeServicePublicKey.keyName }}
+                path: internal-public.pem
+            defaultMode: 0444
+        - name: database-service-public-key
+          secret:
+            secretName: {{ .Values.secrets.databaseServicePublicKey.secretName }}
+            items:
+              - key: {{ .Values.secrets.databaseServicePublicKey.keyName }}
+                path: internal-public.pem
+            defaultMode: 0444
+        - name: storage-service-public-key
+          secret:
+            secretName: {{ .Values.secrets.storageServicePublicKey.secretName }}
+            items:
+              - key: {{ .Values.secrets.storageServicePublicKey.keyName }}
+                path: internal-public.pem
+            defaultMode: 0444
+        - name: authentik-token
+          secret:
+            secretName: {{ .Values.secrets.authentikToken.secretName }}
+            optional: true
+            items:
+              - key: {{ .Values.secrets.authentikToken.keyName }}
+                path: token
+            defaultMode: 0400
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
