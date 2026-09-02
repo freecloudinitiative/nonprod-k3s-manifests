@@ -67,6 +67,9 @@ spec:
     # control-plane node, on its secure port), never the 10.43.0.1 ClusterIP.
     # A rule written against the ClusterIP matches nothing and the request is
     # rejected: `dial tcp 10.43.0.1:443: connect: connection refused`.
+    {{- if or (not .Values.networkPolicy.kubernetesAPIServerCIDRs) (not .Values.networkPolicy.kubernetesAPIServerPort) }}
+    {{- fail "networkPolicy.kubernetesAPIServerCIDRs and .kubernetesAPIServerPort are both required: an egress rule whose peer list or port renders empty is read by NetworkPolicy as every destination, or every port on the control plane." }}
+    {{- end }}
     - to:
 {{- range .Values.networkPolicy.kubernetesAPIServerCIDRs }}
         - ipBlock:
