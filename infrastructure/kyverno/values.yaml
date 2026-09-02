@@ -1,0 +1,37 @@
+admissionController:
+  # Admission enforcement is a security boundary for compute-service's
+  # unscoped RBAC create/escalate grants. Keep two replicas so a single pod
+  # restart does not make the fail-closed webhooks unavailable. The chart
+  # automatically creates a minAvailable: 1 PodDisruptionBudget for replicas
+  # greater than one.
+  replicas: 2
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 384Mi
+
+backgroundController:
+  replicas: 1
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 250m
+      memory: 256Mi
+
+reportsController:
+  replicas: 1
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 250m
+      memory: 256Mi
+
+cleanupController:
+  enabled: false

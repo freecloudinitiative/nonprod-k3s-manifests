@@ -1,0 +1,231 @@
+# compute-service — Helm values.
+#
+# Mirrors the environment variables declared in
+# internal/config/config.go and internal/k8s/config.go.
+
+replicaCount: 2
+revisionHistoryLimit: 3
+
+image:
+  # CI pushes to ghcr.io/freecloudinitiative/<name>:sha-<40-hex> (see
+  # compute-service/.github/workflows/build-and-push.yml, step "Derive
+  # image tags").  The tag or digest MUST be supplied by the caller (e.g.
+  # ArgoCD Application helm.parameters, which prefers image.digest) — an
+  # empty tag is a hard error in
+  # applications/compute-service/templates/_helpers.tpl.  Never falls back to Chart.appVersion.
+  repository: ghcr.io/freecloudinitiative/compute-service
+  tag: ""
+  digest: ""
+  pullPolicy: IfNotPresent
+
+# imagePullSecrets is required: ghcr.io/freecloudinitiative sits behind
+# Traefik's basicAuth middleware. Create a Secret of type
+# kubernetes.io/dockerconfigjson with credentials for the registry and
+# reference it here.
+imagePullSecrets: []
+
+nameOverride: ""
+fullnameOverride: ""
+
+logLevel: info
+
+service:
+  type: ClusterIP
+  port: 80
+  containerPort: 8080
+  metricsPort: 9090
+
+# terminationGracePeriodSeconds must exceed ShutdownGrace so the reconcile
+# worker can drain before kubelet sends SIGKILL.
+terminationGracePeriodSeconds: 40
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+    ephemeral-storage: 50Mi
+  limits:
+    cpu: 500m
+    memory: 256Mi
+    ephemeral-storage: 100Mi
+
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 65532
+  runAsGroup: 65532
+  # Secret volume files are owned by root:root unless fsGroup is set; without
+  # it, a non-root container can't read the 0400 signing-key file it mounts
+  # to mint internal JWTs. Matches api-gateway's podSecurityContext, the
+  # other chart that mounts its own private signing key.
+  fsGroup: 65532
+  seccompProfile:
+    type: RuntimeDefault
+
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop:
+      - ALL
+
+# compute-service is a genuine Kubernetes API client: it provisions
+# fci-cust-* namespaces and manages workload RBAC inside them. The
+# service-account token is required; setting this false breaks all
+# namespace lifecycle calls.
+automountServiceAccountToken: true
+
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 1
+
+networkPolicy:
+  enabled: true
+  # k3s kube-router rejects Service ClusterIP traffic before the namespace and
+  # ipBlock peers below can match it. Keep ingress isolation, but leave egress
+  # unrestricted until the cluster moves to a CNI with pre-DNAT policy support.
+  restrictEgress: false
+  # k3s default Kubernetes API Service ClusterIP. Override if your cluster
+  # service CIDR differs.
+  kubernetesAPIServerCIDR: 10.43.0.1/32
+
+# kubernetes configures the in-cluster API client and namespace
+# provisioner (internal/k8s/config.go).
+kubernetes:
+  enabled: true
+  inCluster: true
+  qps: 20
+  burst: 30
+  timeoutSeconds: 30
+  namespacePrefix: "fci-cust-"
+  # Service account that compute-service runs as — used when creating
+  # per-namespace RoleBindings so the SA can manage workloads there.
+  serviceAccountName: compute-service
+  serviceAccountNamespace: backend
+  # terminal-gateway SA for which compute-service creates exec-target RoleBindings.
+  terminalGatewayServiceAccountName: terminal-gateway
+  terminalGatewayServiceAccountNamespace: backend
+
+# Source Secret compute-service copies into each customer namespace as the
+# instance image-pull Secret. Cross-repo contract: must equal
+# compute-service/internal/k8s/config.go's INSTANCE_PULL_SECRET_SOURCE default.
+# Created by infrastructure/external-secrets/external-secret-ghcr.yaml.
+instancePullSecret:
+  sourceName: ghcr-pull-credentials
+
+reconcile:
+  interval: 2s
+  batchSize: 10
+  staleAfter: 5m
+  maxAttempts: 10
+  resyncInterval: 5m
+
+quota:
+  cacheTTL: 60s
+  iamTimeout: 5s
+  iamServiceURL: http://iam-service.backend.svc.cluster.local
+
+# TTL for internal JWTs compute-service mints with its own signing key to
+# call iam-service's quota route.
+internalTokenTTL: 60s
+
+# metrics.enabled enables the optional Prometheus query endpoint that
+# surfaces per-instance CPU/memory metrics. Requires prometheusURL to be set.
+metrics:
+  enabled: true
+  prometheusURL: "http://kube-prometheus-stack-prometheus.monitoring.svc.cluster.local:9090"
+  prometheusTimeout: 10s
+  metricsCacheTTL: 15s
+
+instanceTypeCacheTTL: 5m
+
+# backup -- nightly crash-consistent compute-engine disk backups.
+# Preconditions closed: issuer fix (compute-service PR-33, merged) makes
+# ResolveTarget match storage-service's expected issuer; digest catalogue
+# gate fixed and passing (compute-service PR-34/PR#83); data-job image
+# published to GHCR nonprod (compute-service PR#84/#85, tag v0.5.0).
+backup:
+  enabled: true
+  schedule: "0 2 * * *"
+  retentionDays: 7
+  concurrencyPerNode: 1
+  # Matches storage-service applications/storage-service/values.yaml
+  # objectStore.region (fci-local) -- a mismatch fails S3 request signing.
+  region: fci-local
+  # Digest-pinned. compute-service config.Validate rejects a tag.
+  jobImage: "ghcr.io/freecloudinitiative/compute-data-job@sha256:428c4414d0a2a108c530b08e7997cd1c4d9ffd6a7476d5ac6d8adb50a4e024b9"
+  bucketEndpoint: "http://storage-service.backend.svc.cluster.local"
+
+# Restore is a separate, unrelated v1 decision: it is intentionally never
+# exposed via HTTP regardless of this setting (see compute-service/README.md
+# and the TestRestore_NoRouteExposed guard test).
+
+serviceAccount:
+  create: true
+  # name is intentionally not configurable — see
+  # compute-service.serviceAccountName in templates/_helpers.tpl.
+  annotations: {}
+
+probes:
+  readiness:
+    initialDelaySeconds: 5
+    periodSeconds: 10
+    failureThreshold: 3
+  liveness:
+    initialDelaySeconds: 10
+    periodSeconds: 20
+    failureThreshold: 3
+
+# Secret references — names of Kubernetes Secrets created by ExternalSecret.
+secrets:
+  # compute-service's own Ed25519 private key, used to mint internal JWTs
+  # for calls to iam-service's quota route.
+  signingKey:
+    secretName: compute-service-signing-key
+    keyName: internal-signing.key
+  # Ed25519 public key used to verify internal JWTs from api-gateway.
+  internalPublicKey:
+    secretName: compute-service-internal-public-key
+    keyName: internal-public.pem
+  # Ed25519 public key from terminal-gateway; trusted on the exec-target route only.
+  terminalGatewayPublicKey:
+    secretName: terminal-gateway-public-key
+    keyName: internal-public.pem
+  # Ed25519 public key from database-service; trusted on the namespace-provisioning route only.
+  databaseServicePublicKey:
+    secretName: database-service-public-key
+    keyName: internal-public.pem
+  # PostgreSQL TLS CA cert.
+  postgresqlCA:
+    secretName: compute-service-postgresql-ca-cert
+  # PostgreSQL credentials (DSN URL).
+  postgresqlCredentials:
+    secretName: compute-service-postgresql-credentials
+  # Valkey password.
+  valkey:
+    secretName: compute-service-valkey-password
+    keyName: password
+  # Valkey TLS CA cert.
+  valkeyCACert:
+    secretName: compute-service-valkey-ca-cert
+    keyName: ca.crt
+
+config:
+  logLevel: info
+  environment: production
+  valkeyURL: valkey.valkey.svc.cluster.local:6379
+  otelEndpoint: opentelemetry-collector.monitoring.svc.cluster.local:4317
+  shutdownGrace: 30s
+
+serviceMonitor:
+  enabled: true
+  interval: 30s
+  namespace: monitoring
+
+prometheusRule:
+  enabled: true
+  namespace: monitoring
+
+podAnnotations: {}
+nodeSelector: {}
+tolerations: []
+affinity: {}

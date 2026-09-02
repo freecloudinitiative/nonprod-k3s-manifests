@@ -1,0 +1,68 @@
+deployment:
+  # DaemonSet, not Deployment: the web/websecure entrypoints bind hostPort 80/443,
+  # so at most one pod can ever run per node. A DaemonSet scoped by the
+  # control-plane nodeSelector below is exactly one pod today and scales itself
+  # when master-2/master-3 are added to inventory.ini.
+  kind: DaemonSet
+
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 1
+
+image:
+  tag: v3.7.10
+
+nodeSelector:
+  node-role.kubernetes.io/control-plane: "true"
+
+tolerations:
+  - key: "node-role.kubernetes.io/master"
+    operator: "Exists"
+    effect: "NoSchedule"
+  - key: "node-role.kubernetes.io/control-plane"
+    operator: "Exists"
+    effect: "NoSchedule"
+
+ports:
+  traefik:
+    port: 9000
+    expose:
+      default: true
+      exposedPort: 9000
+  web:
+    port: 8000
+    hostPort: 80
+  websecure:
+    port: 8443
+    hostPort: 443
+
+service:
+  enabled: true
+  type: ClusterIP
+
+ingressClass:
+  enabled: true
+  isDefaultClass: true
+
+ingressRoute:
+  dashboard:
+    enabled: true
+
+api:
+  dashboard: true
+
+log:
+  level: INFO
+
+accessLog:
+  enabled: true
+
+resources:
+  requests:
+    cpu: 250m
+    memory: 256Mi
+    ephemeral-storage: 100Mi
+  limits:
+    cpu: 1000m
+    memory: 512Mi
+    ephemeral-storage: 500Mi

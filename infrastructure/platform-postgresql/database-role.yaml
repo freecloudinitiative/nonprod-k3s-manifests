@@ -1,0 +1,145 @@
+apiVersion: postgresql.cnpg.io/v1
+kind: DatabaseRole
+metadata:
+  name: platform-role
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  cluster:
+    name: platform-postgresql
+  name: platform
+  comment: Free Cloud Initiative platform API owner
+  login: true
+  superuser: false
+  createdb: false
+  createrole: false
+  bypassrls: false
+  connectionLimit: 80
+  databaseRoleReclaimPolicy: retain
+  passwordSecret:
+    name: platform-postgresql-credentials
+---
+apiVersion: postgresql.cnpg.io/v1
+kind: DatabaseRole
+metadata:
+  name: authentik-role
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  cluster:
+    name: platform-postgresql
+  name: authentik
+  comment: Authentik application owner
+  login: true
+  superuser: false
+  createdb: false
+  createrole: false
+  bypassrls: false
+  connectionLimit: 60
+  databaseRoleReclaimPolicy: retain
+  passwordSecret:
+    name: authentik-postgresql-credentials
+---
+apiVersion: postgresql.cnpg.io/v1
+kind: DatabaseRole
+metadata:
+  name: storage-role
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  cluster:
+    name: platform-postgresql
+  name: storage
+  comment: storage-service schema owner
+  login: true
+  superuser: false
+  createdb: false
+  createrole: false
+  bypassrls: false
+  # applications/storage-service/templates/deployment.yaml sets DB_MAX_CONNS=10;
+  # applications/storage-service/values.yaml sets replicaCount=2.
+  # Pool ceiling: 10 × 2 = 20; connectionLimit 30 adds 10 rollout-surge headroom.
+  # Role budget: platform=80 + authentik=60 + storage=30 + iam=25 + compute=25
+  #   + database=25 = 245 of max_connections=260; 15 reserved for CNPG.
+  connectionLimit: 30
+  databaseRoleReclaimPolicy: retain
+  passwordSecret:
+    name: storage-postgresql-credentials
+---
+apiVersion: postgresql.cnpg.io/v1
+kind: DatabaseRole
+metadata:
+  name: iam-role
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  cluster:
+    name: platform-postgresql
+  name: iam
+  comment: iam-service schema owner (iam schema in platform database)
+  login: true
+  superuser: false
+  createdb: false
+  createrole: false
+  bypassrls: false
+  # applications/iam-service/templates/deployment.yaml sets DB_MAX_CONNS=10;
+  # applications/iam-service/values.yaml sets replicaCount=2.
+  # Pool ceiling: 10 × 2 = 20; connectionLimit 25 adds 5 rollout-surge headroom.
+  # Role budget: platform=80 + authentik=60 + storage=30 + iam=25 + compute=25
+  #   + database=25 = 245 of max_connections=260; 15 reserved for CNPG.
+  connectionLimit: 25
+  databaseRoleReclaimPolicy: retain
+  passwordSecret:
+    name: iam-postgresql-credentials
+---
+apiVersion: postgresql.cnpg.io/v1
+kind: DatabaseRole
+metadata:
+  name: compute-role
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  cluster:
+    name: platform-postgresql
+  name: compute
+  comment: compute-service schema owner (compute schema in platform database)
+  login: true
+  superuser: false
+  createdb: false
+  createrole: false
+  bypassrls: false
+  # applications/compute-service/templates/deployment.yaml sets DB_MAX_CONNS=10;
+  # applications/compute-service/values.yaml sets replicaCount=2.
+  # Pool ceiling: 10 × 2 = 20; connectionLimit 25 adds 5 rollout-surge headroom.
+  # Role budget: platform=80 + authentik=60 + storage=30 + iam=25 + compute=25
+  #   + database=25 = 245 of max_connections=260; 15 reserved for CNPG.
+  connectionLimit: 25
+  databaseRoleReclaimPolicy: retain
+  passwordSecret:
+    name: compute-postgresql-credentials
+---
+apiVersion: postgresql.cnpg.io/v1
+kind: DatabaseRole
+metadata:
+  name: database-role
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  cluster:
+    name: platform-postgresql
+  name: database
+  comment: database-service schema owner (database schema in platform database)
+  login: true
+  superuser: false
+  createdb: false
+  createrole: false
+  bypassrls: false
+  # applications/database-service/values.yaml sets config.databaseMaxConnections=10
+  # (rendered as DB_MAX_CONNS) and replicaCount=2.
+  # Pool ceiling: 10 × 2 = 20; connectionLimit 25 adds 5 rollout-surge headroom.
+  # Role budget: platform=80 + authentik=60 + storage=30 + iam=25 + compute=25
+  #   + database=25 = 245 of max_connections=260; 15 reserved for CNPG.
+  connectionLimit: 25
+  databaseRoleReclaimPolicy: retain
+  passwordSecret:
+    name: database-postgresql-credentials

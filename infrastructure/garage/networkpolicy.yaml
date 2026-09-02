@@ -1,0 +1,62 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: garage-ingress
+  namespace: garage
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: garage
+  policyTypes:
+    - Ingress
+  ingress:
+    # Garage nodes discover and replicate to one another over RPC. k3s
+    # cross-node Service traffic is SNATed to the internal node-overlay CIDR,
+    # so retain the pod selector and admit only that private CIDR as fallback.
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: garage
+        - ipBlock:
+            cidr: 10.1.1.0/24
+      ports:
+        - protocol: TCP
+          port: 3901
+    # Only explicitly approved storage clients access the private S3 API.
+    # The node-overlay fallback is needed for the same k3s cross-node SNAT.
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: backend
+        - namespaceSelector:
+            matchLabels:
+              fci.io/tier: customer
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/managed-by: compute-service
+            matchExpressions:
+              - key: fci.io/backup-id
+                operator: Exists
+        - namespaceSelector:
+            matchLabels:
+              fci.io/tier: customer
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/managed-by: compute-service
+            matchExpressions:
+              - key: fci.io/restore-id
+                operator: Exists
+        - ipBlock:
+            cidr: 10.1.1.0/24
+      ports:
+        - protocol: TCP
+          port: 3900
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: monitoring
+        - ipBlock:
+            cidr: 10.1.1.0/24
+      ports:
+        - protocol: TCP
+          port: 3903

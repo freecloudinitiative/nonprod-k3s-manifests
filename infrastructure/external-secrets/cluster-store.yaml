@@ -1,0 +1,38 @@
+apiVersion: external-secrets.io/v1
+kind: ClusterSecretStore
+metadata:
+  name: openbao-store
+  annotations:
+    # The operator and its CRDs are installed at wave 0. Create the store only
+    # after those controllers are available, and before ExternalSecrets at wave 2.
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  conditions:
+    - namespaces:
+        - authentik
+        - argocd
+        - backend
+        - frontend
+        - garage
+        - monitoring
+        - platform-database
+        - valkey
+  provider:
+    vault:
+      server: "https://openbao-active.openbao.svc.cluster.local:8200"
+      path: "secret"
+      version: "v2"
+      caProvider:
+        type: Secret
+        name: openbao-server-tls
+        key: ca.crt
+        namespace: openbao
+      auth:
+        kubernetes:
+          mountPath: kubernetes
+          role: external-secrets
+          serviceAccountRef:
+            name: external-secrets-openbao
+            namespace: external-secrets
+            audiences:
+              - vault

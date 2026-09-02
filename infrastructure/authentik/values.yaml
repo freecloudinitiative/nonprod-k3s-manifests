@@ -1,0 +1,195 @@
+global:
+  affinity:
+    podAntiAffinity: hard
+    nodeAffinity:
+      type: hard
+      matchExpressions:
+        - key: node-tier
+          operator: In
+          values:
+            - high-memory
+  deploymentStrategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  env:
+    - name: AUTHENTIK_LOG_LEVEL
+      value: info
+    - name: AUTHENTIK_ERROR_REPORTING__ENABLED
+      value: "false"
+    - name: AUTHENTIK_OUTPOSTS__DISCOVER
+      value: "false"
+    - name: AUTHENTIK_POSTGRESQL__HOST
+      value: platform-postgresql-rw.platform-database.svc.cluster.local
+    # 2026.8 uses the direct endpoint for advisory migration locks and
+    # LISTEN/NOTIFY. Point it at CNPG directly so bootstrap replicas cannot
+    # apply the squashed and legacy migration paths concurrently.
+    - name: AUTHENTIK_POSTGRESQL__DIRECT__HOST
+      value: platform-postgresql-rw.platform-database.svc.cluster.local
+    - name: AUTHENTIK_POSTGRESQL__NAME
+      value: authentik
+    - name: AUTHENTIK_POSTGRESQL__USER
+      value: authentik
+    - name: AUTHENTIK_POSTGRESQL__PORT
+      value: "5432"
+    - name: AUTHENTIK_POSTGRESQL__SSLMODE
+      value: verify-full
+    - name: AUTHENTIK_POSTGRESQL__SSLROOTCERT
+      value: /certs/platform-postgresql/ca.crt
+    # Default is 0 (a brand-new connection per request, closed at the end
+    # of it). authentik-server and platform-postgresql routinely land on
+    # different nodes, and a fresh sslmode=verify-full TLS handshake
+    # measured ~0.8-1s cross-node on this fleet -- paid on every single
+    # HTTP request, which is most of why login felt slow (each step of
+    # the flow is its own request). 60s lets gunicorn's sync workers keep
+    # a connection alive across a login's several round trips.
+    - name: AUTHENTIK_POSTGRESQL__CONN_MAX_AGE
+      value: "60"
+  volumeMounts:
+    - name: platform-postgresql-ca
+      mountPath: /certs/platform-postgresql
+      readOnly: true
+  volumes:
+    - name: platform-postgresql-ca
+      secret:
+        secretName: platform-postgresql-ca-bundle
+        items:
+          - key: ca.crt
+            path: ca.crt
+
+authentik:
+  enabled: true
+  existingSecret:
+    secretName: authentik-config
+
+blueprints:
+  # Enable the frontend OIDC blueprint and new SSO integrations.
+  configMaps:
+    - authentik-blueprints
+
+server:
+  # Temporarily dropped from 2 -> 1 (2026-09-01): the authentik role's
+  # postgresql connectionLimit (60, see
+  # infrastructure/platform-postgresql/database-role.yaml) was exhausted by
+  # a crash-loop amplification cycle -- probe failures due to DB connection
+  # errors caused restarts, and each restart opened more connections before
+  # the old ones were reclaimed, digging the hole deeper. Revert to 2 once
+  # the role's live connection count has stayed well under 60 for a while
+  # after this is deployed. See also the connectionLimit bump in the same
+  # incident's follow-up.
+  replicas: 1
+  serviceAccountName: authentik-runtime
+  automountServiceAccountToken: false
+  pdb:
+    enabled: true
+    minAvailable: 1
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 1000
+    runAsGroup: 1000
+    fsGroup: 1000
+    seccompProfile:
+      type: RuntimeDefault
+  containerSecurityContext:
+    runAsNonRoot: true
+    allowPrivilegeEscalation: false
+    capabilities:
+      drop:
+        - ALL
+    seccompProfile:
+      type: RuntimeDefault
+  resources:
+    requests:
+      cpu: 500m
+      memory: 1Gi
+    limits:
+      cpu: "2"
+      memory: 2Gi
+  # Chart default timeoutSeconds (3s) is too tight for this fleet:
+  # /-/health/ready/ does a real DB round-trip and routinely takes ~3s
+  # under load here, so kubelet was marking the pod NotReady on
+  # "context deadline exceeded" even though authentik itself was fine
+  # a moment later -- pulling it out of the Service endpoints and
+  # making auth.nonprod.freecloudinitiative.test 502 with no healthy backend.
+  livenessProbe:
+    timeoutSeconds: 10
+  readinessProbe:
+    timeoutSeconds: 10
+  startupProbe:
+    timeoutSeconds: 10
+  metrics:
+    enabled: true
+    serviceMonitor:
+      enabled: true
+      interval: 30s
+  ingress:
+    enabled: true
+    ingressClassName: traefik
+    annotations:
+      cert-manager.io/cluster-issuer: ca-cluster-issuer
+      traefik.ingress.kubernetes.io/router.entrypoints: websecure
+      traefik.ingress.kubernetes.io/router.middlewares: traefik-security-headers@kubernetescrd
+    hosts:
+      - auth.nonprod.freecloudinitiative.test
+    tls:
+      - secretName: authentik-public-tls
+        hosts:
+          - auth.nonprod.freecloudinitiative.test
+  service:
+    type: ClusterIP
+
+worker:
+  replicas: 1
+  serviceAccountName: authentik-runtime
+  automountServiceAccountToken: false
+  envFrom:
+    - secretRef:
+        name: authentik-bootstrap
+  pdb:
+    enabled: true
+    minAvailable: 1
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 1000
+    runAsGroup: 1000
+    fsGroup: 1000
+    seccompProfile:
+      type: RuntimeDefault
+  containerSecurityContext:
+    runAsNonRoot: true
+    allowPrivilegeEscalation: false
+    capabilities:
+      drop:
+        - ALL
+    seccompProfile:
+      type: RuntimeDefault
+  resources:
+    requests:
+      cpu: 500m
+      memory: 1Gi
+    limits:
+      cpu: "2"
+      memory: 2Gi
+  # See server.readinessProbe above -- same too-tight-for-this-fleet
+  # default timeout, this time on the `ak healthcheck` exec probe.
+  livenessProbe:
+    timeoutSeconds: 10
+  readinessProbe:
+    timeoutSeconds: 10
+  startupProbe:
+    timeoutSeconds: 10
+  metrics:
+    enabled: true
+    serviceMonitor:
+      enabled: true
+      interval: 30s
+
+postgresql:
+  enabled: false
+
+geoip:
+  enabled: false
+
+serviceAccount:
+  create: false
