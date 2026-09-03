@@ -886,6 +886,79 @@ data:
                color: #ffffff !important;
             }
 
+            /* Footer links, set by footer-links-job.yaml. authentik renders
+               them into ak-brand-links ahead of its own "Powered by
+               authentik" text item; this gives that row the bordered,
+               notch-labelled panel the dashboard uses for every service, and
+               the pill colours from tui-dashboard.css so the two surfaces
+               agree. Untouched by the .pf-c-login__main-footer-band rules
+               above -- those restyle the Sign up link, which lives inside
+               the card, not here. */
+            ak-brand-links[name="flow-links"] {
+               display: block !important;
+               position: relative !important;
+               width: fit-content !important;
+               max-width: min(560px, calc(100vw - 32px)) !important;
+               margin: 26px auto 0 !important;
+               padding: 14px 14px 11px !important;
+               border: 1px solid var(--fci-border) !important;
+               border-radius: 6px !important;
+               background: var(--fci-bg) !important;
+            }
+            ak-brand-links[name="flow-links"]::before {
+               content: "LINKS";
+               position: absolute;
+               top: -9px;
+               left: 12px;
+               padding: 0 6px;
+               background: var(--fci-bg);
+               color: var(--fci-muted);
+               font-size: 12px;
+               font-family: "Courier New", Courier, monospace;
+               letter-spacing: 0.06em;
+            }
+            ak-brand-links[name="flow-links"] ul {
+               display: flex !important;
+               flex-wrap: wrap !important;
+               gap: 8px !important;
+               align-items: center !important;
+               justify-content: center !important;
+               margin: 0 !important;
+               padding: 0 !important;
+            }
+            ak-brand-links[name="flow-links"] li[data-kind="text"] {
+               color: var(--fci-muted) !important;
+               font-size: 11px !important;
+            }
+            ak-brand-links[name="flow-links"] li[data-kind="link"] a {
+               display: inline-flex !important;
+               align-items: center !important;
+               padding: 3px 10px !important;
+               border-radius: 4px !important;
+               border: 1px solid !important;
+               font-size: 11px !important;
+               font-weight: bold !important;
+               letter-spacing: 0.04em !important;
+               text-decoration: none !important;
+               font-family: "Courier New", Courier, monospace !important;
+            }
+            ak-brand-links[name="flow-links"] li[data-kind="link"] a:hover {
+               filter: brightness(1.2) !important;
+            }
+            /* Positional, because authentik gives the items no per-link
+               identity. Order matches footer-links-job.yaml's payload, and
+               the colours are tui-dashboard.css's .fci-pill-creator,
+               .fci-pill-docs and .fci-pill-arch. */
+            ak-brand-links li[data-kind="link"]:nth-of-type(1) a {
+               background: #4f46e5 !important; border-color: #6366f1 !important; color: #ffffff !important;
+            }
+            ak-brand-links li[data-kind="link"]:nth-of-type(2) a {
+               background: #2563eb !important; border-color: #3b82f6 !important; color: #ffffff !important;
+            }
+            ak-brand-links li[data-kind="link"]:nth-of-type(3) a {
+               background: #0d9488 !important; border-color: #14b8a6 !important; color: #ffffff !important;
+            }
+
             @media (max-width: 560px) {
               ak-flow-executor::part(main) {
                 width: calc(100vw - 24px);

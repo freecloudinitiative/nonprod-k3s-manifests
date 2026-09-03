@@ -1,0 +1,99 @@
+# The login page's footer links cannot be declared in blueprint.yaml.
+# footer_links lives on authentik's Tenant model, not on Brand, and Tenant
+# carries InternallyManagedMixin -- "models that should _not_ be manageable
+# via blueprint" -- which the blueprint importer enforces by refusing any
+# model that subclasses it. A blueprint entry for it is silently ignored, so
+# the setting has to be written through the API instead.
+#
+# PATCH is idempotent, so this re-runs harmlessly on every sync.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: authentik-footer-links
+  namespace: authentik
+  annotations:
+    argocd.argoproj.io/hook: PostSync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+automountServiceAccountToken: false
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: authentik-footer-links
+  namespace: authentik
+  annotations:
+    argocd.argoproj.io/hook: PostSync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+spec:
+  backoffLimit: 6
+  template:
+    metadata:
+      labels:
+        # networkpolicy.yaml admits this label to authentik-server:9000.
+        fci.io/role: authentik-footer-links
+    spec:
+      serviceAccountName: authentik-footer-links
+      automountServiceAccountToken: false
+      restartPolicy: OnFailure
+      securityContext:
+        runAsNonRoot: true
+        # Same reasoning as garage/bootstrap-job.yaml: alpine/k8s leaves USER
+        # unset, and runAsNonRoot rejects a root-default image that does not
+        # name a uid.
+        runAsUser: 65532
+        runAsGroup: 65532
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: footer-links
+          image: alpine/k8s:1.30.4@sha256:129291af93e2b5df392f619cee8564cac4b377d66ff45f52f165af87688b68b9
+          imagePullPolicy: IfNotPresent
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          resources:
+            requests:
+              cpu: 25m
+              memory: 64Mi
+              ephemeral-storage: 16Mi
+            limits:
+              cpu: 200m
+              memory: 256Mi
+              ephemeral-storage: 64Mi
+          env:
+            - name: AUTHENTIK_BOOTSTRAP_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: authentik-bootstrap
+                  key: AUTHENTIK_BOOTSTRAP_TOKEN
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              set -eu
+              api=http://authentik-server.authentik.svc.cluster.local/api/v3/admin/settings/
+              # PostSync runs after the sync reports healthy, but the server
+              # can still be finishing its own migrations; retry rather than
+              # leaving the login page silently unbranded.
+              attempt=1
+              while [ "$attempt" -le 30 ]; do
+                if curl -sS --fail-with-body -X PATCH "$api" \
+                     -H "Authorization: Bearer ${AUTHENTIK_BOOTSTRAP_TOKEN}" \
+                     -H "Content-Type: application/json" \
+                     --data '{"footer_links":[
+                       {"name":"About Creator","href":"https://theomerkaratas.github.io/resume/"},
+                       {"name":"Docs","href":"https://freecloudinitiative.github.io/docs/"},
+                       {"name":"GitHub","href":"https://github.com/freecloudinitiative"}
+                     ]}'; then
+                  echo
+                  echo "footer links applied"
+                  exit 0
+                fi
+                echo "attempt ${attempt}/30 failed; retrying in 10s"
+                attempt=$((attempt + 1))
+                sleep 10
+              done
+              echo "could not reach ${api}" >&2
+              exit 1
