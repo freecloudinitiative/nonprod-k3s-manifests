@@ -974,10 +974,145 @@ data:
                background: #0d9488 !important; border-color: #14b8a6 !important; color: #ffffff !important;
             }
 
+            /* Frame the complete authentication surface like the dashboard's
+               .fci-page > .fci-tui shell. Authentik's default three-row login
+               grid was also the source of the very tall password-stage card:
+               each row stretched to consume the viewport. Explicit rows keep
+               the banner/footer compact and let the card size to its content. */
+            ak-flow-executor::part(login) {
+              width: calc(100% - 40px) !important;
+              min-height: calc(100dvh - 40px) !important;
+              margin: 20px !important;
+              box-sizing: border-box !important;
+              border: 1px solid var(--fci-border) !important;
+              border-radius: 6px !important;
+              grid-template-rows: 104px minmax(0, 1fr) auto !important;
+              justify-content: stretch !important;
+              overflow: auto !important;
+            }
+
+            ak-flow-executor::part(main) {
+              display: block !important;
+              align-self: center !important;
+              justify-self: center !important;
+              width: min(420px, calc(100vw - 72px)) !important;
+              min-height: 0 !important;
+              height: fit-content !important;
+              margin: 36px auto 24px !important;
+              padding: 34px 28px 26px !important;
+              box-sizing: border-box !important;
+            }
+
+            /* The dashboard identity sits above the working panel instead of
+               being squeezed into its border notch. */
+            ak-flow-executor::part(main)::before {
+              content: "[FREE CLOUD INITIATIVE]";
+              position: fixed;
+              top: 50px;
+              left: 50%;
+              z-index: 2;
+              transform: translateX(-50%);
+              width: max-content;
+              padding: 0 12px;
+              background: var(--fci-bg);
+              color: #e8a020;
+              font-size: clamp(20px, 3.2vw, 42px);
+              font-weight: 700;
+              letter-spacing: 0.08em;
+              line-height: 1;
+              text-shadow: 0 0 18px rgba(232, 160, 32, 0.72), 0 0 5px rgba(232, 160, 32, 0.9);
+            }
+
+            ak-flow-executor::part(main)::after {
+              content: "AUTHENTICATION";
+              position: absolute;
+              top: -9px;
+              left: 16px;
+              padding: 0 7px;
+              background: var(--fci-bg);
+              color: var(--fci-accent);
+              font-size: 12px;
+              letter-spacing: 0.12em;
+            }
+
+            ak-flow-executor::part(challenge),
+            ak-flow-card,
+            .pf-c-form,
+            .pf-v5-c-form,
+            .pf-v6-c-form {
+              width: 100% !important;
+              max-width: none !important;
+              box-sizing: border-box !important;
+            }
+
+            ak-flow-executor::part(challenge) {
+              padding: 0 !important;
+            }
+
+            .pf-c-form,
+            .pf-v5-c-form,
+            .pf-v6-c-form {
+              display: flex !important;
+              flex-direction: column !important;
+              gap: 18px !important;
+            }
+
+            .pf-c-form__group,
+            .pf-v5-c-form__group,
+            .pf-v6-c-form__group {
+              margin-top: 8px !important;
+              margin-bottom: 8px !important;
+            }
+
+            .pf-c-form__group.pf-m-action,
+            .pf-v5-c-form__group.pf-m-action,
+            .pf-v6-c-form__group.pf-m-action {
+              margin-top: 4px !important;
+              margin-bottom: 0 !important;
+            }
+
+            ak-flow-executor::part(additional-actions),
+            .pf-c-login__main-footer,
+            .pf-v5-c-login__main-footer,
+            .pf-v6-c-login__main-footer,
+            .pf-c-login__main-footer-band,
+            .pf-v5-c-login__main-footer-band,
+            .pf-v6-c-login__main-footer-band {
+              width: 100% !important;
+              box-sizing: border-box !important;
+            }
+
+            ak-flow-executor::part(footer) {
+              align-self: end !important;
+              padding: 12px 24px 18px !important;
+            }
+
+            ak-brand-links[name="flow-links"] {
+              margin: 0 auto !important;
+            }
+
             @media (max-width: 560px) {
+              ak-flow-executor::part(login) {
+                width: calc(100% - 24px) !important;
+                min-height: calc(100dvh - 24px) !important;
+                margin: 12px !important;
+                grid-template-rows: 80px minmax(0, 1fr) auto !important;
+              }
+
               ak-flow-executor::part(main) {
-                width: calc(100vw - 24px);
-                padding: 30px 20px 22px;
+                width: calc(100vw - 48px) !important;
+                margin-top: 24px !important;
+                padding: 30px 20px 22px !important;
+              }
+
+              ak-flow-executor::part(main)::before {
+                top: 38px;
+                font-size: clamp(16px, 6vw, 24px);
+                letter-spacing: 0.055em;
+              }
+
+              ak-flow-executor::part(footer) {
+                padding: 10px 12px 14px !important;
               }
             }
           attributes:
