@@ -47,6 +47,9 @@ data:
               url: https://nonprod.freecloudinitiative.test/callback
               redirect_uri_type: authorization
             - matching_mode: strict
+              url: https://nonprod.freecloudinitiative.test/
+              redirect_uri_type: logout
+            - matching_mode: strict
               url: https://nonprod.freecloudinitiative.test/login
               redirect_uri_type: logout
             - matching_mode: strict
