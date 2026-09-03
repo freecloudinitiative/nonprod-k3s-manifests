@@ -140,7 +140,12 @@ internalTokenTTL: 60s
 # surfaces per-instance CPU/memory metrics. Requires prometheusURL to be set.
 metrics:
   enabled: true
-  prometheusURL: "http://kube-prometheus-stack-prometheus.monitoring.svc.cluster.local:9090"
+  # kube-prometheus-stack serves under routePrefix /prometheus (see
+  # infrastructure/kube-prometheus-stack/values.yaml), so the base URL needs
+  # that prefix. Without it every query 404s, the service maps the non-200 to
+  # 503, and the gateway's circuit breaker then opens on the whole upstream --
+  # taking unrelated routes down with it.
+  prometheusURL: "http://kube-prometheus-stack-prometheus.monitoring.svc.cluster.local:9090/prometheus"
   prometheusTimeout: 10s
   metricsCacheTTL: 15s
 
