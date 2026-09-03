@@ -5,15 +5,28 @@
 # model that subclasses it. A blueprint entry for it is silently ignored, so
 # the setting has to be written through the API instead.
 #
-# PATCH is idempotent, so this re-runs harmlessly on every sync.
+# PATCH is idempotent, so re-running is harmless.
+#
+# Deliberately NOT an ArgoCD hook. A hook is invisible to the desired-state
+# diff, so it never makes an Application OutOfSync and only ever runs when
+# something else in the app happens to change. That is exactly how the first
+# attempt at this failed: argocd-config updated the Application's
+# directory.include six minutes after the authentik app had already synced,
+# so the sync that would have run the hook used the include that did not yet
+# name this file -- and with nothing else drifting, no later sync came.
+#
+# As a tracked resource its absence is drift, so ArgoCD creates it on its own.
+# Replace=true because a Job's pod template is immutable: changing the links
+# below would otherwise fail the sync instead of re-running the Job.
 apiVersion: v1
 kind: ServiceAccount
 metadata:
   name: authentik-footer-links
   namespace: authentik
   annotations:
-    argocd.argoproj.io/hook: PostSync
-    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+    # After authentik's own resources, so the API is usually already up; the
+    # retry loop below is what actually guarantees it.
+    argocd.argoproj.io/sync-wave: "10"
 automountServiceAccountToken: false
 ---
 apiVersion: batch/v1
@@ -22,8 +35,8 @@ metadata:
   name: authentik-footer-links
   namespace: authentik
   annotations:
-    argocd.argoproj.io/hook: PostSync
-    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+    argocd.argoproj.io/sync-wave: "10"
+    argocd.argoproj.io/sync-options: Replace=true
 spec:
   backoffLimit: 6
   template:
