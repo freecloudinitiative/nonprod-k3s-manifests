@@ -331,6 +331,21 @@ data:
         identifiers:
           domain: auth.nonprod.freecloudinitiative.test
         attrs:
+          # This is the only brand this deployment serves, so it is also the
+          # fallback for any Host that does not match a brand domain.
+          #
+          # It also stops authentik's own "Default - Brand" blueprint from
+          # failing every hour. That blueprint creates a brand at domain
+          # "authentik-default" guarded by "only if no other default brand
+          # exists" -- and with nothing marked default, the guard passes, the
+          # create runs, and the row it wants is already there:
+          #
+          #   Entry invalid: Serializer errors
+          #   {'domain': [ErrorDetail(string='This field must be unique.')]}
+          #
+          # Claiming default here makes that guard do its job, so the
+          # blueprint skips the entry instead of retrying a doomed insert.
+          default: true
           branding_title: Free Cloud Initiative
           # Keep authentik visibly credited while the surrounding experience
           # follows the frontend's terminal-style visual language.
