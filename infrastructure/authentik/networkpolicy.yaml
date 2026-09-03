@@ -34,6 +34,17 @@ spec:
       ports:
         - protocol: TCP
           port: 9000
+    # The footer-links Job PATCHes the tenant settings API, which is the only
+    # way to set the login page's footer links -- blueprints cannot touch the
+    # Tenant model. Without this rule the Job's requests are dropped and it
+    # exhausts its retries while authentik itself looks perfectly healthy.
+    - from:
+        - podSelector:
+            matchLabels:
+              fci.io/role: authentik-footer-links
+      ports:
+        - protocol: TCP
+          port: 9000
   egress:
     - to:
         - namespaceSelector:
