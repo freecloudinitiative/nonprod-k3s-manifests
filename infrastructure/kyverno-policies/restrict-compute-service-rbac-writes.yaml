@@ -139,8 +139,9 @@ spec:
           that specific role name actually uses in internal/k8s/rbac.go —
           not the union of both roles' tokens. compute-service-workloads may
           use apiGroups ["", apps, batch, networking.k8s.io], resources
-          [deployments, services, persistentvolumeclaims, configmaps,
-          resourcequotas, limitranges, secrets, jobs, networkpolicies, pods],
+          [deployments, replicasets, services, persistentvolumeclaims,
+          configmaps, resourcequotas, limitranges, secrets, jobs,
+          networkpolicies, pods],
           and verbs [create, get, list, watch, update, patch, delete,
           deletecollection]. terminal-gateway-exec may use only apiGroup [""],
           resources [pods, pods/exec], and verbs [get, list, create]. A single
@@ -178,9 +179,10 @@ spec:
                 value: >-
                   {{ request.object.metadata.name ==
                   'compute-service-workloads' &&
-                  `["deployments", "services", "persistentvolumeclaims",
-                  "configmaps", "resourcequotas", "limitranges", "secrets",
-                  "jobs", "networkpolicies", "pods"]` ||
+                  `["deployments", "replicasets", "services",
+                  "persistentvolumeclaims", "configmaps", "resourcequotas",
+                  "limitranges", "secrets", "jobs", "networkpolicies",
+                  "pods"]` ||
                   `["pods", "pods/exec"]` }}
               - key: "{{ request.object.rules[].verbs[] }}"
                 operator: AnyNotIn
