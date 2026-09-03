@@ -36,12 +36,15 @@ spec:
           port: 9000
     # The footer-links Job PATCHes the tenant settings API, which is the only
     # way to set the login page's footer links -- blueprints cannot touch the
-    # Tenant model. Without this rule the Job's requests are dropped and it
-    # exhausts its retries while authentik itself looks perfectly healthy.
+    # Tenant model. k3s SNATs cross-node Service traffic to the private
+    # node-overlay address, so keep the pod selector and admit that CIDR as a
+    # fallback.
     - from:
         - podSelector:
             matchLabels:
               fci.io/role: authentik-footer-links
+        - ipBlock:
+            cidr: 10.1.1.0/24
       ports:
         - protocol: TCP
           port: 9000
