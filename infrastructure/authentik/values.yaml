@@ -18,7 +18,7 @@ global:
   # sync with `git hash-object infrastructure/authentik/blueprint.yaml` to
   # restart Authentik and trigger startup blueprint discovery.
   podAnnotations:
-    fci.io/blueprint-hash: "56fc240818a83d6dd1ffcafd473b35491a76484f"
+    fci.io/blueprint-hash: "620689d7caf15d77e6ce0542b79090700359471a"
   env:
     - name: AUTHENTIK_LOG_LEVEL
       value: info
