@@ -14,7 +14,7 @@ data:
       errors
       cache 30
       rewrite stop {
-        name regex (.*\.)?nonprod\.freecloudinitiative\.test traefik.traefik.svc.cluster.local
+        name regex (.*\.)?nonprod\.freecloudinitiative\.com traefik.traefik.svc.cluster.local
         answer auto
       }
       kubernetes cluster.local in-addr.arpa ip6.arpa
