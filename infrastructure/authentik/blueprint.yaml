@@ -63,19 +63,19 @@ data:
           refresh_token_validity: hours=24
           redirect_uris:
             - matching_mode: strict
-              url: https://nonprod.freecloudinitiative.test/callback
+              url: https://nonprod.freecloudinitiative.com/callback
               redirect_uri_type: authorization
             - matching_mode: strict
-              url: https://nonprod.freecloudinitiative.test/
+              url: https://nonprod.freecloudinitiative.com/
               redirect_uri_type: logout
             - matching_mode: strict
-              url: https://nonprod.freecloudinitiative.test/login
+              url: https://nonprod.freecloudinitiative.com/login
               redirect_uri_type: logout
             - matching_mode: strict
-              url: https://nonprod.freecloudinitiative.test/login?reauth=1
+              url: https://nonprod.freecloudinitiative.com/login?reauth=1
               redirect_uri_type: logout
             - matching_mode: strict
-              url: https://nonprod.freecloudinitiative.test/login?reason=idle&reauth=1
+              url: https://nonprod.freecloudinitiative.com/login?reason=idle&reauth=1
               redirect_uri_type: logout
           property_mappings:
             - !Find [authentik_providers_oauth2.scopemapping, [managed, goauthentik.io/providers/oauth2/scope-openid]]
@@ -138,7 +138,7 @@ data:
           client_secret: !Env GRAFANA_OIDC_SECRET
           redirect_uris:
             - matching_mode: strict
-              url: https://grafana.nonprod.freecloudinitiative.test/grafana/login/generic_oauth
+              url: https://grafana.nonprod.freecloudinitiative.com/grafana/login/generic_oauth
           property_mappings:
             - !Find [authentik_providers_oauth2.scopemapping, [managed, goauthentik.io/providers/oauth2/scope-openid]]
             - !Find [authentik_providers_oauth2.scopemapping, [managed, goauthentik.io/providers/oauth2/scope-profile]]
@@ -164,7 +164,7 @@ data:
           client_secret: !Env ARGOCD_OIDC_SECRET
           redirect_uris:
             - matching_mode: strict
-              url: https://argocd.nonprod.freecloudinitiative.test/api/dex/callback
+              url: https://argocd.nonprod.freecloudinitiative.com/api/dex/callback
           property_mappings:
             - !Find [authentik_providers_oauth2.scopemapping, [managed, goauthentik.io/providers/oauth2/scope-openid]]
             - !Find [authentik_providers_oauth2.scopemapping, [managed, goauthentik.io/providers/oauth2/scope-profile]]
@@ -185,7 +185,7 @@ data:
         attrs:
           authorization_flow: !Find [authentik_flows.flow, [slug, default-provider-authorization-implicit-consent]]
           invalidation_flow: !Find [authentik_flows.flow, [slug, default-provider-invalidation-flow]]
-          external_host: https://prometheus.nonprod.freecloudinitiative.test
+          external_host: https://prometheus.nonprod.freecloudinitiative.com
           mode: forward_single
       - model: authentik_core.application
         identifiers:
@@ -201,7 +201,7 @@ data:
         attrs:
           authorization_flow: !Find [authentik_flows.flow, [slug, default-provider-authorization-implicit-consent]]
           invalidation_flow: !Find [authentik_flows.flow, [slug, default-provider-invalidation-flow]]
-          external_host: https://alloy.nonprod.freecloudinitiative.test
+          external_host: https://alloy.nonprod.freecloudinitiative.com
           mode: forward_single
       - model: authentik_core.application
         identifiers:
@@ -217,7 +217,7 @@ data:
         attrs:
           authorization_flow: !Find [authentik_flows.flow, [slug, default-provider-authorization-implicit-consent]]
           invalidation_flow: !Find [authentik_flows.flow, [slug, default-provider-invalidation-flow]]
-          external_host: https://longhorn.nonprod.freecloudinitiative.test
+          external_host: https://longhorn.nonprod.freecloudinitiative.com
           mode: forward_single
       - model: authentik_core.application
         identifiers:
@@ -359,13 +359,13 @@ data:
           order: 30
 
       # Without this, a login or signup started directly at
-      # auth.nonprod.freecloudinitiative.test (no app/client_id context -- exactly
+      # auth.nonprod.freecloudinitiative.com (no app/client_id context -- exactly
       # what a fresh signup is, since the enrollment flow above runs on
       # this domain with no redirect_uri) lands on authentik's own "My
       # applications" page instead of the app. Setting the default Brand's
       # default_application makes authentik immediately continue into this
       # application's own OIDC flow, which lands the user back on
-      # nonprod.freecloudinitiative.test/callback like a normal login does.
+      # nonprod.freecloudinitiative.com/callback like a normal login does.
       - model: authentik_flows.flow
         identifiers:
           slug: default-authentication-flow
@@ -377,7 +377,7 @@ data:
 
       - model: authentik_brands.brand
         identifiers:
-          domain: auth.nonprod.freecloudinitiative.test
+          domain: auth.nonprod.freecloudinitiative.com
         attrs:
           # This is the only brand this deployment serves, so it is also the
           # fallback for any Host that does not match a brand domain.

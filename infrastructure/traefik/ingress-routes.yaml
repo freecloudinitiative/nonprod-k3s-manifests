@@ -27,14 +27,12 @@ metadata:
   name: grafana-ingress
   namespace: monitoring
   annotations:
-    # No public DNS exists in nonprod. Certificates are issued by the
-    # cluster-local CA and the CA is trusted explicitly on operator clients.
-    cert-manager.io/cluster-issuer: ca-cluster-issuer
+    cert-manager.io/cluster-issuer: letsencrypt-nonprod
     traefik.ingress.kubernetes.io/router.entrypoints: websecure
 spec:
   ingressClassName: traefik
   rules:
-    - host: grafana.nonprod.freecloudinitiative.test
+    - host: grafana.nonprod.freecloudinitiative.com
       http:
         paths:
           - path: /
@@ -46,7 +44,7 @@ spec:
                   number: 80
   tls:
     - hosts:
-        - grafana.nonprod.freecloudinitiative.test
+        - grafana.nonprod.freecloudinitiative.com
       secretName: grafana-tls
 
 ---
@@ -56,13 +54,13 @@ metadata:
   name: alloy-ingress
   namespace: monitoring
   annotations:
-    cert-manager.io/cluster-issuer: ca-cluster-issuer
+    cert-manager.io/cluster-issuer: letsencrypt-nonprod
     traefik.ingress.kubernetes.io/router.entrypoints: websecure
     traefik.ingress.kubernetes.io/router.middlewares: traefik-authentik-forwardauth@kubernetescrd
 spec:
   ingressClassName: traefik
   rules:
-    - host: alloy.nonprod.freecloudinitiative.test
+    - host: alloy.nonprod.freecloudinitiative.com
       http:
         paths:
           - path: /
@@ -74,7 +72,7 @@ spec:
                   number: 12345
   tls:
     - hosts:
-        - alloy.nonprod.freecloudinitiative.test
+        - alloy.nonprod.freecloudinitiative.com
       secretName: alloy-tls
 
 ---
@@ -85,13 +83,11 @@ metadata:
   namespace: traefik
 spec:
   secretName: traefik-dashboard-tls
-  # This reserved .test name is mapped to the master IP in the operator's
-  # hosts file. It is intentionally absent from public DNS.
   issuerRef:
-    name: ca-cluster-issuer
+    name: letsencrypt-nonprod
     kind: ClusterIssuer
   dnsNames:
-    - traefik.nonprod.freecloudinitiative.test
+    - traefik.nonprod.freecloudinitiative.com
 
 ---
 apiVersion: traefik.io/v1alpha1
@@ -103,7 +99,7 @@ spec:
   entryPoints:
     - websecure
   routes:
-    - match: Host(`traefik.nonprod.freecloudinitiative.test`)
+    - match: Host(`traefik.nonprod.freecloudinitiative.com`)
       kind: Rule
       services:
         - name: api@internal
@@ -118,14 +114,12 @@ metadata:
   name: argocd-ingress
   namespace: argocd
   annotations:
-    # This reserved .test name is mapped to the master IP in the operator's
-    # hosts file. It is intentionally absent from public DNS.
-    cert-manager.io/cluster-issuer: ca-cluster-issuer
+    cert-manager.io/cluster-issuer: letsencrypt-nonprod
     traefik.ingress.kubernetes.io/router.entrypoints: websecure
 spec:
   ingressClassName: traefik
   rules:
-    - host: argocd.nonprod.freecloudinitiative.test
+    - host: argocd.nonprod.freecloudinitiative.com
       http:
         paths:
           - path: /
@@ -137,7 +131,7 @@ spec:
                   number: 80
   tls:
     - hosts:
-        - argocd.nonprod.freecloudinitiative.test
+        - argocd.nonprod.freecloudinitiative.com
       secretName: argocd-tls
 
 ---
@@ -147,13 +141,13 @@ metadata:
   name: prometheus-ingress
   namespace: monitoring
   annotations:
-    cert-manager.io/cluster-issuer: ca-cluster-issuer
+    cert-manager.io/cluster-issuer: letsencrypt-nonprod
     traefik.ingress.kubernetes.io/router.entrypoints: websecure
     traefik.ingress.kubernetes.io/router.middlewares: traefik-authentik-forwardauth@kubernetescrd
 spec:
   ingressClassName: traefik
   rules:
-    - host: prometheus.nonprod.freecloudinitiative.test
+    - host: prometheus.nonprod.freecloudinitiative.com
       http:
         paths:
           - path: /
@@ -165,7 +159,7 @@ spec:
                   number: 9090
   tls:
     - hosts:
-        - prometheus.nonprod.freecloudinitiative.test
+        - prometheus.nonprod.freecloudinitiative.com
       secretName: prometheus-tls
 
 ---
@@ -175,15 +169,13 @@ metadata:
   name: longhorn-ingress
   namespace: longhorn-system
   annotations:
-    # This reserved .test name is mapped to the master IP in the operator's
-    # hosts file. It is intentionally absent from public DNS.
-    cert-manager.io/cluster-issuer: ca-cluster-issuer
+    cert-manager.io/cluster-issuer: letsencrypt-nonprod
     traefik.ingress.kubernetes.io/router.entrypoints: websecure
     traefik.ingress.kubernetes.io/router.middlewares: traefik-authentik-forwardauth@kubernetescrd
 spec:
   ingressClassName: traefik
   rules:
-    - host: longhorn.nonprod.freecloudinitiative.test
+    - host: longhorn.nonprod.freecloudinitiative.com
       http:
         paths:
           - path: /
@@ -195,5 +187,5 @@ spec:
                   number: 80
   tls:
     - hosts:
-        - longhorn.nonprod.freecloudinitiative.test
+        - longhorn.nonprod.freecloudinitiative.com
       secretName: longhorn-tls

@@ -117,7 +117,7 @@ server:
   # under load here, so kubelet was marking the pod NotReady on
   # "context deadline exceeded" even though authentik itself was fine
   # a moment later -- pulling it out of the Service endpoints and
-  # making auth.nonprod.freecloudinitiative.test 502 with no healthy backend.
+  # making auth.nonprod.freecloudinitiative.com 502 with no healthy backend.
   livenessProbe:
     timeoutSeconds: 10
   readinessProbe:
@@ -133,15 +133,15 @@ server:
     enabled: true
     ingressClassName: traefik
     annotations:
-      cert-manager.io/cluster-issuer: ca-cluster-issuer
+      cert-manager.io/cluster-issuer: letsencrypt-nonprod
       traefik.ingress.kubernetes.io/router.entrypoints: websecure
       traefik.ingress.kubernetes.io/router.middlewares: traefik-security-headers@kubernetescrd
     hosts:
-      - auth.nonprod.freecloudinitiative.test
+      - auth.nonprod.freecloudinitiative.com
     tls:
       - secretName: authentik-public-tls
         hosts:
-          - auth.nonprod.freecloudinitiative.test
+          - auth.nonprod.freecloudinitiative.com
   service:
     type: ClusterIP
 

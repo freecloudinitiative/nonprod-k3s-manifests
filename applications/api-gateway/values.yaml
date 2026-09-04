@@ -104,16 +104,16 @@ config:
   # item's path (applications/api-gateway/templates/deployment.yaml: mountPath=/etc/fci/tls, path=ca.crt).
   valkeyCACertPath: "/etc/fci/tls/ca.crt"
   # Authentik OIDC — JWKS and issuer URL.
-  # Source: authentik/values.yaml:94 (host = auth.nonprod.freecloudinitiative.test) +
+  # Source: authentik/values.yaml:94 (host = auth.nonprod.freecloudinitiative.com) +
   # authentik/blueprint.yaml (app slug = freecloudinitiative).
   # Issuer format follows Authentik's documented convention:
   #   https://<host>/application/o/<slug>/   (trailing slash is load-bearing: the
   # iss claim in the JWT must match byte-for-byte).
   # Verified against: authentik/blueprint.yaml (source of truth; cluster endpoint
-  # https://auth.nonprod.freecloudinitiative.test/application/o/freecloudinitiative/.well-known/openid-configuration
+  # https://auth.nonprod.freecloudinitiative.com/application/o/freecloudinitiative/.well-known/openid-configuration
   # was not reachable from the dev machine at the time this was written — confirm
   # against the live discovery doc when the cluster is accessible).
-  authentikIssuer: "https://auth.nonprod.freecloudinitiative.test/application/o/freecloudinitiative/"
+  authentikIssuer: "https://auth.nonprod.freecloudinitiative.com/application/o/freecloudinitiative/"
   # In-cluster JWKS fetch address. Deliberately in-cluster HTTP: this pod has no
   # port-443 egress (see networkpolicy.yaml), so it cannot reach the public
   # issuer hostname above. Host/port confirmed by rendering the authentik
@@ -130,7 +130,7 @@ config:
   # identities caused the defect this comment exists to prevent.
   authentikClientID: "freecloudinitiative-frontend"
   # Allowed CORS origins — must match the SPA's public origin (blueprint.yaml `redirect_uris`).
-  allowedOrigins: "https://nonprod.freecloudinitiative.test"
+  allowedOrigins: "https://nonprod.freecloudinitiative.com"
   # Bind each console ticket to the client IP that minted it, derived from the
   # left-most X-Forwarded-For entry. MUST equal
   # applications/terminal-gateway/values.yaml consoleTicket.bindIP — a ticket

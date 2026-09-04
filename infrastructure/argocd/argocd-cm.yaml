@@ -7,10 +7,10 @@ metadata:
     app.kubernetes.io/name: argocd-cm
     app.kubernetes.io/part-of: argocd
 data:
-  url: https://argocd.nonprod.freecloudinitiative.test
+  url: https://argocd.nonprod.freecloudinitiative.com
   oidc.config: |
     name: Authentik
-    issuer: https://auth.nonprod.freecloudinitiative.test/application/o/argocd/
+    issuer: https://auth.nonprod.freecloudinitiative.com/application/o/argocd/
     clientID: argocd-oidc
     clientSecret: $argocd-oidc-secret:clientSecret
     requestedScopes: ["openid", "profile", "email"]

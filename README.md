@@ -12,13 +12,18 @@ services, but it is isolated from the production domain and edge network.
 - No Cloudflare resources, tunnel token, namespace, or workload.
 - No MetalLB and no Kubernetes `LoadBalancer` Services. K3s ServiceLB remains
   disabled by Ansible.
-- No public DNS records. Browser-facing names use the reserved `.test` TLD and
-  are resolved from the operator machine's hosts file.
+- Browser-facing names live under the real `*.nonprod.freecloudinitiative.com`
+  subdomain, managed in `terraform-cloudflare-infra` as plain (non-proxied) A
+  records pointing at the master's public IP. No hosts-file edits needed on
+  operator machines.
 - A K3s `coredns-custom` fragment resolves those same names to Traefik only
-  inside the cluster, so Argo CD and Grafana can complete OIDC exchanges.
+  inside the cluster, so Argo CD and Grafana can complete OIDC exchanges
+  without hairpinning back out through the node's own public IP.
 - Traefik runs on the control-plane node and binds host ports 80 and 443.
-- Browser TLS certificates are issued by the cluster-local CA. Nothing uses
-  ACME or Let's Encrypt.
+- Browser-facing TLS certificates are issued by Let's Encrypt
+  (`letsencrypt-nonprod` ClusterIssuer, HTTP-01) - no CA import needed on
+  operator machines. Internal-only TLS (Postgres, Valkey, Authentik's own
+  cert) still uses the cluster-local `ca-cluster-issuer`.
 - Authentik uses local login and enrollment only; social OAuth sources are
   disabled because they require a publicly registered callback hostname.
 - The frontend deliberately runs with `appEnv: prod` so nonprod exercises the
@@ -28,42 +33,30 @@ services, but it is isolated from the production domain and edge network.
 - Secrets remain in the nonprod OpenBao instance and are materialized by
   External Secrets. Never reuse the production OpenBao data or commit secrets.
 
-## DNS-free browser access
+## Browser access
 
-After the cluster is installed, replace `<MASTER_PUBLIC_IP>` and add this line
-to the hosts file of each operator workstation:
+No per-workstation setup is required. `*.nonprod.freecloudinitiative.com` is
+real, publicly-resolvable DNS (managed in `terraform-cloudflare-infra`,
+`nonprod.tf`), and every browser-facing host gets a Let's Encrypt certificate
+that's trusted out of the box.
 
-```text
-<MASTER_PUBLIC_IP> nonprod.freecloudinitiative.test auth.nonprod.freecloudinitiative.test argocd.nonprod.freecloudinitiative.test grafana.nonprod.freecloudinitiative.test prometheus.nonprod.freecloudinitiative.test alloy.nonprod.freecloudinitiative.test longhorn.nonprod.freecloudinitiative.test traefik.nonprod.freecloudinitiative.test
-```
+The endpoints are:
 
-The endpoints are then:
+- Frontend: `https://nonprod.freecloudinitiative.com`
+- Authentik: `https://auth.nonprod.freecloudinitiative.com`
+- Argo CD: `https://argocd.nonprod.freecloudinitiative.com`
+- Grafana: `https://grafana.nonprod.freecloudinitiative.com`
+- Prometheus: `https://prometheus.nonprod.freecloudinitiative.com`
+- Alloy: `https://alloy.nonprod.freecloudinitiative.com`
+- Longhorn: `https://longhorn.nonprod.freecloudinitiative.com`
+- Traefik: `https://traefik.nonprod.freecloudinitiative.com`
 
-- Frontend: `https://nonprod.freecloudinitiative.test`
-- Authentik: `https://auth.nonprod.freecloudinitiative.test`
-- Argo CD: `https://argocd.nonprod.freecloudinitiative.test`
-- Grafana: `https://grafana.nonprod.freecloudinitiative.test`
-- Prometheus: `https://prometheus.nonprod.freecloudinitiative.test`
-- Alloy: `https://alloy.nonprod.freecloudinitiative.test`
-- Longhorn: `https://longhorn.nonprod.freecloudinitiative.test`
-- Traefik: `https://traefik.nonprod.freecloudinitiative.test`
+### After a full cluster teardown/rebuild
 
-The names deliberately do not resolve on the public Internet. This keeps the
-production DNS zone untouched while preserving the stable hostnames required
-by OIDC issuers and redirect URIs.
-
-### Trust the nonprod CA
-
-Once cert-manager has created the CA, export it with the nonprod kubeconfig:
-
-```bash
-kubectl -n cert-manager get secret selfsigned-ca-secret \
-  -o jsonpath='{.data.ca\.crt}' | base64 --decode > nonprod-k3s-ca.crt
-```
-
-Import `nonprod-k3s-ca.crt` into the workstation/browser trust store before
-testing login flows. The CA is environment-local and must not be replaced by
-or imported from production.
+The master node has no Elastic IP, so a fresh cluster gets a new public IP.
+Update `nonprod_ingress_ip` in `terraform-cloudflare-infra` to the new IP and
+apply - that's the only step. DNS and Let's Encrypt certs pick up the change
+on their own; no operator machine needs anything redone.
 
 ## Bootstrap handoff to Ansible
 
