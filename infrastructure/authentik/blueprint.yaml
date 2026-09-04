@@ -232,6 +232,12 @@ data:
       labels:
         blueprints.goauthentik.io/instantiate: "true"
     entries:
+      - model: authentik_blueprints.metaapplyblueprint
+        attrs:
+          identifiers:
+            name: Default - Authentication flow
+          required: true
+
       # Checks the two password prompts match. authentik ships no built-in
       # policy for this -- every "add a signup flow" example defines its own
       # tiny expression policy, so this mirrors that pattern.
