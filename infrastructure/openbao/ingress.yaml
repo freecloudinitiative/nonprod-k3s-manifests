@@ -8,7 +8,7 @@ metadata:
 spec:
   ingressClassName: traefik
   rules:
-    - host: vault.nonprod.freecloudinitiative.test
+    - host: vault.nonprod.freecloudinitiative.com
       http:
         paths:
           - path: /
@@ -18,7 +18,7 @@ spec:
                 name: openbao-active
                 port:
                   number: 8200
-    - host: openbao.nonprod.freecloudinitiative.test
+    - host: openbao.nonprod.freecloudinitiative.com
       http:
         paths:
           - path: /

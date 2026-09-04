@@ -140,7 +140,7 @@ config:
   shutdownGrace: 25s
   # Authentik OIDC issuer — must match the iss claim in Authentik-minted tokens.
   # Format: https://<host>/application/o/<slug>/ (trailing slash is load-bearing).
-  authentikIssuer: "https://auth.nonprod.freecloudinitiative.test/application/o/freecloudinitiative/"
+  authentikIssuer: "https://auth.nonprod.freecloudinitiative.com/application/o/freecloudinitiative/"
   authentikClientID: "freecloudinitiative-frontend"
   # Authentik admin API — user/group sync and drift reconciliation. Service
   # port is 80 (targetPort 9000); see infrastructure/authentik/networkpolicy.yaml

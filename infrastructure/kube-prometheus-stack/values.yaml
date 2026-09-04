@@ -96,9 +96,9 @@ grafana:
       client_secret: "${OIDC_CLIENT_SECRET}"
       scopes: openid profile email
       empty_scopes: false
-      auth_url: https://auth.nonprod.freecloudinitiative.test/application/o/authorize/
-      token_url: https://auth.nonprod.freecloudinitiative.test/application/o/token/
-      api_url: https://auth.nonprod.freecloudinitiative.test/application/o/userinfo/
+      auth_url: https://auth.nonprod.freecloudinitiative.com/application/o/authorize/
+      token_url: https://auth.nonprod.freecloudinitiative.com/application/o/token/
+      api_url: https://auth.nonprod.freecloudinitiative.com/application/o/userinfo/
       allow_sign_up: true
       role_attribute_path: "contains(groups[*], 'grafana-admins') && 'Admin' || 'Viewer'"
 

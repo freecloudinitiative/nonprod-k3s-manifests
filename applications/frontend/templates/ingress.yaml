@@ -7,7 +7,7 @@ metadata:
   labels:
     {{- include "frontend.labels" . | nindent 4 }}
   annotations:
-    cert-manager.io/cluster-issuer: ca-cluster-issuer
+    cert-manager.io/cluster-issuer: letsencrypt-nonprod
     traefik.ingress.kubernetes.io/router.entrypoints: websecure
     traefik.ingress.kubernetes.io/router.middlewares: traefik-security-headers@kubernetescrd
 spec:

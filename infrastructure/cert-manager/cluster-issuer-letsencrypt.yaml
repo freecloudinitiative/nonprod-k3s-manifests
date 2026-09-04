@@ -1,0 +1,21 @@
+---
+# Let's Encrypt Production Cluster Issuer - browser-facing nonprod hosts
+# (auth, frontend, grafana, argocd, ...) under *.nonprod.freecloudinitiative.com.
+# Internal-only TLS (Postgres, Valkey, Authentik's own cert) stays on
+# ca-cluster-issuer - see infrastructure/cert-manager/cluster-issuer-ca.yaml.
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: letsencrypt-nonprod
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  acme:
+    server: https://acme-v02.api.letsencrypt.org/directory
+    email: theomerkaratas@gmail.com
+    privateKeySecretRef:
+      name: letsencrypt-nonprod-key
+    solvers:
+      - http01:
+          ingress:
+            class: traefik

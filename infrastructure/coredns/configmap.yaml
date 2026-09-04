@@ -10,7 +10,7 @@ data:
   # their hosts file, while in-cluster OAuth clients need the same names to
   # reach Traefik without any public or Route 53 DNS record.
   nonprod.server: |
-    nonprod.freecloudinitiative.test:53 {
+    nonprod.freecloudinitiative.com:53 {
       errors
       cache 30
       rewrite stop {

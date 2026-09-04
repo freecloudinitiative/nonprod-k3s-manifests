@@ -105,7 +105,7 @@ websocket:
   # browser's public host — so same-origin can never match and every
   # handshake 403s. Keep in step with applications/frontend/values.yaml
   # ingress.host.
-  allowedOrigins: "nonprod.freecloudinitiative.test"
+  allowedOrigins: "nonprod.freecloudinitiative.com"
 
 consoleTicket:
   # Reject a handshake whose client IP does not match the IP the ticket was
