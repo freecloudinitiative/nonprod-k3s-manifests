@@ -554,6 +554,7 @@ data:
             .pf-v5-c-form__group.pf-m-action,
             .pf-v6-c-form__group.pf-m-action {
                border: none !important;
+               width: 100% !important;
                padding: 0 !important;
                background: transparent !important;
             }
@@ -786,12 +787,20 @@ data:
             .pf-c-login__main-footer,
             .pf-v5-c-login__main-footer,
             .pf-v6-c-login__main-footer {
-              display: grid !important;
-              grid-template-columns: 1fr;
-              gap: 8px;
-              margin-top: 24px !important;
-              align-items: stretch;
-              justify-items: stretch;
+              display: flex !important;
+              flex-direction: column !important;
+              gap: 16px !important;
+              margin-top: 16px !important;
+              align-items: stretch !important;
+            }
+
+            slot[name="footer"],
+            slot[name="footer-band"] {
+              display: flex !important;
+              flex-direction: column !important;
+              width: 100% !important;
+              gap: 16px !important;
+              margin: 0 !important;
             }
 
             /* The Google source button actually ships in a
@@ -1185,9 +1194,14 @@ data:
                intro elsewhere. display:none rather than font-size:0 -- the
                <p> carries margin the sibling fields would otherwise inherit
                a gap from, and removing the box removes that gap with it. */
-            .pf-c-form > p:first-child,
-            .pf-v5-c-form > p:first-child,
-            .pf-v6-c-form > p:first-child {
+            .pf-c-form > p,
+            .pf-v5-c-form > p,
+            .pf-v6-c-form > p,
+            ak-stage-identification > p,
+            ak-stage-identification > div > p,
+            .pf-c-login__main-header-desc,
+            .pf-v5-c-login__main-header-desc,
+            .pf-v6-c-login__main-header-desc {
               display: none !important;
             }
 
