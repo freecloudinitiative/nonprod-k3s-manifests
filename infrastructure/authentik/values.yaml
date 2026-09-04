@@ -141,6 +141,12 @@ server:
 
 worker:
   replicas: 1
+  # The blueprint ConfigMap is mounted from a separate Argo CD source, so its
+  # contents are not part of the Helm Deployment checksum. Keep this value in
+  # sync with `git hash-object infrastructure/authentik/blueprint.yaml` to
+  # restart the worker and trigger Authentik's startup blueprint discovery.
+  podAnnotations:
+    fci.io/blueprint-hash: "56fc240818a83d6dd1ffcafd473b35491a76484f"
   serviceAccountName: authentik-runtime
   automountServiceAccountToken: false
   envFrom:
