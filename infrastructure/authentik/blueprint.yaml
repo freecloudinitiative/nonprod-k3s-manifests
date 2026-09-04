@@ -232,6 +232,12 @@ data:
       labels:
         blueprints.goauthentik.io/instantiate: "true"
     entries:
+      - model: authentik_blueprints.metaapplyblueprint
+        attrs:
+          identifiers:
+            name: Default - Authentication flow
+          required: true
+
       # Checks the two password prompts match. authentik ships no built-in
       # policy for this -- every "add a signup flow" example defines its own
       # tiny expression policy, so this mirrors that pattern.
@@ -402,6 +408,7 @@ data:
               --fci-text: #d7e3eb;
               --fci-muted: #7990a0;
               --fci-accent: #4fa8dc;
+              --fci-control-height: 44px;
               /* Matches frontend/src/pages/tui-dashboard.css's
                  --dash-input-bg -- the same "recessed terminal box" look
                  the app's own service-search inputs use, rather than a
@@ -509,7 +516,9 @@ data:
                position: relative;
                border: 1px solid var(--fci-border) !important;
                border-radius: 6px !important;
-               padding: 16px 10px 8px 10px !important;
+               min-height: var(--fci-control-height);
+               padding: 6px 10px !important;
+               box-sizing: border-box !important;
                background: var(--fci-bg) !important;
                margin-top: 24px !important;
                margin-bottom: 24px !important;
@@ -521,6 +530,19 @@ data:
             .pf-v6-c-form__group:focus-within {
                border-color: var(--fci-border-bright) !important;
                box-shadow: 0 0 10px rgba(79, 168, 220, 0.15) !important;
+            }
+
+            /* Inline password entry is a pf-c-form__group host containing
+               its own real pf-c-form__group. Do not draw and pad both;
+               that produces the nested, oversized password box seen in
+               the separate password-stage screenshot. */
+            ak-flow-input-password.pf-c-form__group {
+               border: none !important;
+               min-height: 0 !important;
+               padding: 0 !important;
+               margin: 0 !important;
+               background: transparent !important;
+               box-shadow: none !important;
             }
 
             /* .pf-c-form__group.pf-m-action wraps the submit button using
@@ -628,6 +650,7 @@ data:
                  the group's right padding and border. */
               box-sizing: border-box !important;
               width: 100% !important;
+              min-height: 30px !important;
             }
 
             input::placeholder,
@@ -656,6 +679,14 @@ data:
               font-weight: 700 !important;
               letter-spacing: 0.055em;
               box-shadow: none !important;
+            }
+
+            button[type="submit"],
+            .pf-c-button.pf-m-block,
+            .pf-v5-c-button.pf-m-block,
+            .pf-v6-c-button.pf-m-block {
+              min-height: var(--fci-control-height) !important;
+              box-sizing: border-box !important;
             }
 
             button:hover,
@@ -742,12 +773,15 @@ data:
               color: #ffffff !important;
             }
 
-            /* Footer layout for Google & Sign Up buttons side-by-side */
+            /* Nonprod has no external login source, so its only additional
+               action is Sign up. Keep it full-width directly below Log in;
+               the production-only two-column Google/Sign-up layout would
+               otherwise leave this action stranded in the left half. */
             .pf-c-login__main-footer,
             .pf-v5-c-login__main-footer,
             .pf-v6-c-login__main-footer {
               display: grid !important;
-              grid-template-columns: 1fr 1fr;
+              grid-template-columns: 1fr;
               gap: 8px;
               margin-top: 24px !important;
               /* The Sign Up link isn't in a flex container that honors its
@@ -813,7 +847,7 @@ data:
                   Left to size on content alone the two buttons never land
                   on the same height, so both get an explicit shared
                   min-height instead. */
-               min-height: 38px !important;
+               min-height: var(--fci-control-height) !important;
                height: auto !important;
                display: flex !important;
                justify-content: center !important;
@@ -900,7 +934,7 @@ data:
                /* Match .source-button's explicit min-height -- see the
                   comment there for why content-based sizing alone leaves
                   this shorter than the Google button. */
-               min-height: 38px !important;
+               min-height: var(--fci-control-height) !important;
 
                background: var(--fci-bg) !important;
                border: 1px solid var(--fci-border) !important;
@@ -1175,5 +1209,13 @@ data:
           user_fields:
             - email
             - username
+          # Render password entry in the identification form. The stock
+          # password binding remains guarded by Authentik's dynamic
+          # "password optional" policy and is skipped after this inline
+          # stage authenticates the pending user.
+          password_stage: !Find
+            - authentik_stages_password.passwordstage
+            - - name
+              - default-authentication-password
           enrollment_flow: !KeyOf enrollment-flow
           sources: []
