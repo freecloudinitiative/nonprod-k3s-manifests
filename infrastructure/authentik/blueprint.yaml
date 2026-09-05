@@ -1165,7 +1165,7 @@ data:
             ak-flow-card {
               display: block !important;
               width: 100% !important;
-              min-height: 360px !important;
+              min-height: 0 !important;
               box-sizing: border-box !important;
             }
 
